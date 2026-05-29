@@ -7,7 +7,7 @@ Terminal Jira client with git and Claude Code integration.
 Requires a Rust toolchain ([rustup.rs](https://rustup.rs)).
 
 ```sh
-cargo install --git <your-repo-url>
+cargo install --git https://github.com/palmensimon/fira.git
 ```
 
 ## Configuration

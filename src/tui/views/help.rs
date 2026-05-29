@@ -77,7 +77,7 @@ pub fn draw(frame: &mut Frame, area: Rect) {
                 ("Tab / ↑↓", "Navigate fields"),
                 ("Space", "Toggle boolean fields"),
                 ("Enter", "Save"),
-                ("Ctrl+O", "Open config.yaml in nvim"),
+                ("Ctrl+O", "Open user_defaults.yaml in nvim"),
                 ("Ctrl+T", "Open templates.yaml in nvim"),
                 ("Esc", "Cancel"),
             ],
@@ -197,7 +197,7 @@ pub fn status_bar_hints(view_name: &str) -> &'static [(&'static str, &'static st
         "Settings" => &[
             ("Tab/↑↓", "navigate"),
             ("Enter", "save"),
-            ("Ctrl+O", "edit config.yaml"),
+            ("Ctrl+O", "edit user_defaults.yaml"),
             ("Ctrl+T", "edit templates.yaml"),
             ("Esc", "cancel"),
         ],

@@ -88,7 +88,7 @@ pub struct TicketTemplate {
     pub assignee: Option<String>,
 }
 
-/// Holds the shareable, team-wide defaults. Serialized as `settings.yaml`.
+/// Holds the shareable, team-wide defaults. Serialized as `user_defaults.yaml`.
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct SettingsFile {
     #[serde(default)]
@@ -101,11 +101,11 @@ pub fn config_dir() -> PathBuf {
         .join("jura")
 }
 
-pub fn settings_path() -> PathBuf {
-    config_dir().join("settings.yaml")
+pub fn user_defaults_path() -> PathBuf {
+    config_dir().join("user_defaults.yaml")
 }
 
-/// Load credentials from `config.yaml`. If `settings.yaml` exists its
+/// Load credentials from `config.yaml`. If `user_defaults.yaml` exists its
 /// `defaults` section wins; otherwise the `defaults` block inside `config.yaml`
 /// is used as a backward-compatible fallback.
 pub fn load_config() -> Result<Config> {
@@ -114,23 +114,23 @@ pub fn load_config() -> Result<Config> {
         .with_context(|| format!("Could not read config at {}", path.display()))?;
     let mut config: Config = serde_yaml::from_str(&content).context("Failed to parse config.yaml")?;
 
-    if let Some(sf) = load_settings() {
+    if let Some(sf) = load_user_defaults() {
         config.defaults = sf.defaults;
     }
 
     Ok(config)
 }
 
-/// Load `settings.yaml`. Returns `None` if the file doesn't exist yet.
-pub fn load_settings() -> Option<SettingsFile> {
-    let path = settings_path();
+/// Load `user_defaults.yaml`. Returns `None` if the file doesn't exist yet.
+pub fn load_user_defaults() -> Option<SettingsFile> {
+    let path = user_defaults_path();
     if !path.exists() { return None; }
     let content = std::fs::read_to_string(&path).ok()?;
     serde_yaml::from_str(&content).ok()
 }
 
 /// Persist only the Jira credentials to `config.yaml`.
-/// Defaults live in `settings.yaml` and are not written here.
+/// Defaults live in `user_defaults.yaml` and are not written here.
 pub fn save_config(config: &Config) -> Result<()> {
     #[derive(Serialize)]
     struct CredFile<'a> { jira: &'a JiraConfig }
@@ -143,13 +143,13 @@ pub fn save_config(config: &Config) -> Result<()> {
         .with_context(|| format!("Failed to write config to {}", path.display()))
 }
 
-/// Persist defaults/preferences to `settings.yaml` (the shareable file).
+/// Persist defaults/preferences to `user_defaults.yaml`.
 pub fn save_settings(defaults: &Defaults) -> Result<()> {
     let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
     let file = SettingsFile { defaults: defaults.clone() };
-    let yaml = serde_yaml::to_string(&file).context("Failed to serialize settings")?;
-    std::fs::write(settings_path(), yaml).context("Failed to write settings.yaml")
+    let yaml = serde_yaml::to_string(&file).context("Failed to serialize user_defaults")?;
+    std::fs::write(user_defaults_path(), yaml).context("Failed to write user_defaults.yaml")
 }
 
 pub fn load_templates() -> Result<Templates> {
@@ -178,10 +178,10 @@ pub fn write_example_config() -> Result<()> {
         eprintln!("Created example config at {}", config_path.display());
     }
 
-    let settings_path = dir.join("settings.yaml");
-    if !settings_path.exists() {
+    let user_defaults_path = dir.join("user_defaults.yaml");
+    if !user_defaults_path.exists() {
         std::fs::write(
-            &settings_path,
+            &user_defaults_path,
             r#"defaults:
   # Jira project key to filter by default (e.g. "PROJ")
   project: "PROJ"
@@ -215,7 +215,7 @@ pub fn write_example_config() -> Result<()> {
     sort_dir: "desc"     # desc | asc
 "#,
         )?;
-        eprintln!("Created example settings at {}", settings_path.display());
+        eprintln!("Created example user_defaults at {}", user_defaults_path.display());
     }
 
     let templates_path = dir.join("templates.yaml");

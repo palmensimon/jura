@@ -9,13 +9,14 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tui_textarea::TextArea;
 
 use crate::{
-    config::{Config, JiraConfig, save_config},
+    config::{Config, JiraConfig, save_config, save_settings},
     tui::app::{App, AppEvent, AppView},
 };
 
 const F_BASE_URL: usize = 0;
 const F_TOKEN: usize = 1;
-const FIELD_COUNT: usize = 2;
+const F_PROJECT: usize = 2;
+const FIELD_COUNT: usize = 3;
 
 pub struct SettingsState {
     inputs: [TextArea<'static>; FIELD_COUNT],
@@ -28,6 +29,7 @@ impl SettingsState {
         let mut inputs = std::array::from_fn(|_| TextArea::default());
         inputs[F_BASE_URL] = single_line_area(&config.jira.base_url);
         inputs[F_TOKEN] = masked_area(&config.jira.token);
+        inputs[F_PROJECT] = single_line_area(config.defaults.project.as_deref().unwrap_or(""));
 
         let mut state = Self { inputs, token_revealed: false, active: 0 };
         state.refresh_styles();
@@ -83,15 +85,18 @@ impl SettingsState {
     fn build_config(&self, existing: &Config) -> Result<Config, String> {
         let base_url = self.first_line(F_BASE_URL);
         let token = self.first_line(F_TOKEN);
+        let project = self.first_line(F_PROJECT);
         if base_url.is_empty() {
             return Err("Base URL is required".to_string());
         }
         if token.is_empty() {
             return Err("Token / PAT is required".to_string());
         }
+        let mut defaults = existing.defaults.clone();
+        defaults.project = if project.is_empty() { None } else { Some(project) };
         Ok(Config {
             jira: JiraConfig { base_url, token },
-            defaults: existing.defaults.clone(),
+            defaults,
         })
     }
 }
@@ -104,7 +109,9 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
     if is_save {
         match state.build_config(&app.config) {
             Ok(new_cfg) => {
-                if let Err(e) = save_config(&new_cfg) {
+                let save_result = save_config(&new_cfg)
+                    .and_then(|_| save_settings(&new_cfg.defaults));
+                if let Err(e) = save_result {
                     app.error = Some(format!("Save failed: {e:#}"));
                 } else {
                     let tx = app.event_tx.clone();
@@ -130,6 +137,7 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
         KeyCode::Down => state.move_next(),
         KeyCode::Char('1') => state.move_to(F_BASE_URL),
         KeyCode::Char('2') => state.move_to(F_TOKEN),
+        KeyCode::Char('3') => state.move_to(F_PROJECT),
         KeyCode::Char(' ') if state.active == F_TOKEN => {
             let next = !state.token_revealed;
             state.reveal_token(next);
@@ -149,7 +157,8 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
             Constraint::Length(2), // header
             Constraint::Length(3), // base_url
             Constraint::Length(3), // token
-            Constraint::Min(0),    // settings.yaml info
+            Constraint::Length(3), // project
+            Constraint::Min(0),    // user_defaults.yaml info
             Constraint::Length(2), // footer bar
         ])
         .split(area);
@@ -190,20 +199,22 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
         );
     }
 
+    frame.render_widget(&state.inputs[F_PROJECT], chunks[3]);
+
     // Info block
-    let settings_file = crate::config::settings_path();
+    let user_defaults_file = crate::config::user_defaults_path();
     let templates_file = crate::config::config_dir().join("templates.yaml");
     let info_lines = vec![
         Line::from(vec![
             Span::styled("  Defaults and filter preferences are configured in ", Style::default().fg(Color::DarkGray)),
-            Span::styled(settings_file.display().to_string(), Style::default().fg(Color::Cyan)),
+            Span::styled(user_defaults_file.display().to_string(), Style::default().fg(Color::Cyan)),
         ]),
         Line::from(vec![
             Span::styled("  Create ticket templates are configured in ", Style::default().fg(Color::DarkGray)),
             Span::styled(templates_file.display().to_string(), Style::default().fg(Color::Cyan)),
         ]),
     ];
-    frame.render_widget(Paragraph::new(info_lines), chunks[3]);
+    frame.render_widget(Paragraph::new(info_lines), chunks[4]);
 
     // Footer — error or config file path
     let footer_content = if let Some(err) = &app.error {
@@ -218,7 +229,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
                 .borders(Borders::TOP)
                 .border_style(Style::default().fg(Color::DarkGray)),
         ),
-        chunks[4],
+        chunks[5],
     );
 }
 
@@ -228,6 +239,7 @@ fn field_meta(idx: usize) -> (&'static str, bool) {
     match idx {
         F_BASE_URL => ("[1] Base URL", false),
         F_TOKEN => ("[2] Token / PAT", true),
+        F_PROJECT => ("[3] Default Project", false),
         _ => ("", false),
     }
 }

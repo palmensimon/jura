@@ -333,7 +333,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 execute!(std::io::stdout(), EnterAlternateScreen, EnableMouseCapture).ok();
                             };
                             if key.code == KeyCode::Char('o') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                                open_in_nvim(config_dir().join("config.yaml"));
+                                open_in_nvim(config_dir().join("user_defaults.yaml"));
                                 terminal.clear().ok();
                             } else if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
                                 open_in_nvim(config_dir().join("templates.yaml"));

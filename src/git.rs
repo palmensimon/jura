@@ -1,13 +1,5 @@
 use anyhow::{Context, Result};
-use regex::Regex;
 use std::process::Command;
-use std::sync::OnceLock;
-
-static TICKET_RE: OnceLock<Regex> = OnceLock::new();
-
-fn ticket_regex() -> &'static Regex {
-    TICKET_RE.get_or_init(|| Regex::new(r"([A-Z][A-Z0-9_]+-\d+)").unwrap())
-}
 
 pub fn slugify(s: &str) -> String {
     let slug: String = s
@@ -27,9 +19,23 @@ pub fn branch_name(ticket_key: &str, summary: &str) -> String {
 }
 
 pub fn extract_ticket_key(branch: &str) -> Option<String> {
-    ticket_regex()
-        .find(branch)
-        .map(|m| m.as_str().to_string())
+    let bytes = branch.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+    while i < len {
+        if !bytes[i].is_ascii_uppercase() { i += 1; continue; }
+        let start = i;
+        i += 1;
+        while i < len && (bytes[i].is_ascii_uppercase() || bytes[i].is_ascii_digit() || bytes[i] == b'_') {
+            i += 1;
+        }
+        if i - start < 2 || i >= len || bytes[i] != b'-' { continue; }
+        i += 1;
+        let num_start = i;
+        while i < len && bytes[i].is_ascii_digit() { i += 1; }
+        if i > num_start { return Some(branch[start..i].to_string()); }
+    }
+    None
 }
 
 pub fn current_branch() -> Result<String> {

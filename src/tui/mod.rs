@@ -107,7 +107,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
             } else if matches!(app.view, AppView::TicketDetail { .. }) {
                 ticket_detail::draw_bar(&app, &detail_state, frame, bar_area);
             } else {
-                help::draw_status_bar(frame, bar_area, help::status_bar_hints(vname), app.all.loading || app.mine.loading);
+                help::draw_status_bar(frame, bar_area, help::status_bar_hints(vname), app.all.loading || app.mine.loading, app.status_msg.as_deref());
             }
 
             // Help popup (drawn last so it's on top)
@@ -338,6 +338,29 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             } else if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
                                 open_in_nvim(config_dir().join("templates.yaml"));
                                 terminal.clear().ok();
+                            } else if key.code == KeyCode::Char('r') {
+                                let mut reload_ok = true;
+                                match crate::config::load_config() {
+                                    Ok(new_cfg) => {
+                                        app.filter = app::FilterState::from_config(&new_cfg);
+                                        app.config = std::sync::Arc::new(new_cfg);
+                                        settings_state = SettingsState::new(&app.config);
+                                    }
+                                    Err(e) => {
+                                        app.error = Some(format!("Reload failed: {e:#}"));
+                                        reload_ok = false;
+                                    }
+                                }
+                                match crate::config::load_templates() {
+                                    Ok(t) => { app.templates = t.templates; }
+                                    Err(e) => {
+                                        app.error = Some(format!("Template reload failed: {e:#}"));
+                                        reload_ok = false;
+                                    }
+                                }
+                                if reload_ok {
+                                    app.status_msg = Some("Configuration reloaded".to_string());
+                                }
                             } else {
                                 settings::handle_key(&mut app, &mut settings_state, key);
                             }
@@ -355,8 +378,6 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                     app.view = AppView::TicketList;
 
                                     let mut new_cfg = (*app.config).clone();
-                                    new_cfg.defaults.assigned_to_me = filter.assigned_to_me;
-                                    new_cfg.defaults.hide_done = filter.hide_done;
                                     new_cfg.defaults.default_filter = DefaultFilter {
                                         statuses: filter.selected_statuses.clone(),
                                         component: filter.component.clone(),

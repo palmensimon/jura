@@ -38,7 +38,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
             app.view = AppView::CreateTicket;
         }
         KeyCode::Char('r') => {
-            app.trigger_load();
+            app.current_branch_key = crate::git::current_branch().ok()
+                .and_then(|b| crate::git::extract_ticket_key(&b));
+            app.trigger_load_tab(Tab::All);
+            app.trigger_load_tab(Tab::Mine);
         }
         KeyCode::Char('/') => {
             let ts = app.active_tab_mut();
@@ -134,6 +137,7 @@ pub fn draw_bar(app: &App, frame: &mut Frame, area: Rect) {
         Line::from(Span::styled(format!(" {msg}"), Style::default().fg(Color::Green)))
     } else {
         let hints: &[(&str, &str)] = &[
+            ("Space", "checkout"),
             ("/", "search"),
             ("f", "filter"),
             ("c", "create"),
@@ -173,7 +177,7 @@ fn draw_header(app: &App, frame: &mut Frame, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let summary = filter_summary_string(app);
+    let summary =format!("{} tickets", app.active_tab().issues.len());
     let right_width = (summary.chars().count() as u16 + 1).min(area.width.saturating_sub(20));
 
     let chunks = Layout::default()
@@ -211,26 +215,6 @@ fn draw_header(app: &App, frame: &mut Frame, area: Rect) {
             chunks[1],
         );
     }
-}
-
-fn filter_summary_string(app: &App) -> String {
-    let mut parts = vec![];
-
-    if app.tab == Tab::All {
-        if let Some(comp) = &app.filter.component {
-            parts.push(format!("component: {comp}"));
-        }
-        if !app.filter.selected_statuses.is_empty() {
-            parts.push(format!("status: {}", app.filter.selected_statuses.join(", ")));
-        } else if app.filter.hide_done {
-            parts.push("hide done".to_string());
-        }
-        if app.filter.assigned_to_me {
-            parts.push("assigned to me".to_string());
-        }
-    }
-    parts.push(format!("{} tickets", app.active_tab().issues.len()));
-    parts.join("  ")
 }
 
 fn draw_table(app: &mut App, frame: &mut Frame, area: Rect) {

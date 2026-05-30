@@ -52,7 +52,7 @@ pub fn draw(frame: &mut Frame, area: Rect) {
         (
             "Filter Panel  (popup)",
             &[
-                ("1 – 9", "Jump to field (from non-text fields)"),
+                ("1 – 8", "Jump to field (from non-text fields)"),
                 ("Tab / ↑↓", "Navigate fields"),
                 ("←/→", "Move between options"),
                 ("Space", "Toggle / cycle"),
@@ -77,6 +77,7 @@ pub fn draw(frame: &mut Frame, area: Rect) {
                 ("Tab / ↑↓", "Navigate fields"),
                 ("Space", "Toggle boolean fields"),
                 ("Enter", "Save"),
+                ("r", "Reload user_defaults.yaml and templates.yaml from disk"),
                 ("Ctrl+O", "Open user_defaults.yaml in nvim"),
                 ("Ctrl+T", "Open templates.yaml in nvim"),
                 ("Esc", "Cancel"),
@@ -117,8 +118,9 @@ pub fn draw(frame: &mut Frame, area: Rect) {
 }
 
 /// Renders the global bottom status bar (1 line) in the classic `[key] action` style.
-/// When `loading` is true, a right-aligned "loading…" indicator is also drawn.
-pub fn draw_status_bar(frame: &mut Frame, area: Rect, hints: &[(&str, &str)], loading: bool) {
+/// When `loading` is true a right-aligned "loading…" indicator is drawn.
+/// When `loading` is false and `right_msg` is Some, that message is shown right-aligned instead.
+pub fn draw_status_bar(frame: &mut Frame, area: Rect, hints: &[(&str, &str)], loading: bool, right_msg: Option<&str>) {
     let mut spans = vec![Span::raw(" ")];
     for (i, (key, action)) in hints.iter().enumerate() {
         if i > 0 {
@@ -138,6 +140,16 @@ pub fn draw_status_bar(frame: &mut Frame, area: Rect, hints: &[(&str, &str)], lo
             let right = Rect { x: area.x + area.width - w, y: area.y, width: w, height: 1 };
             frame.render_widget(
                 Paragraph::new(Span::styled(label, Style::default().fg(Color::DarkGray))),
+                right,
+            );
+        }
+    } else if let Some(msg) = right_msg {
+        let label = format!("{msg} ");
+        let w = label.chars().count() as u16;
+        if w <= area.width {
+            let right = Rect { x: area.x + area.width - w, y: area.y, width: w, height: 1 };
+            frame.render_widget(
+                Paragraph::new(Span::styled(label, Style::default().fg(Color::Green))),
                 right,
             );
         }
@@ -197,6 +209,7 @@ pub fn status_bar_hints(view_name: &str) -> &'static [(&'static str, &'static st
         "Settings" => &[
             ("Tab/↑↓", "navigate"),
             ("Enter", "save"),
+            ("r", "reload config files"),
             ("Ctrl+O", "edit user_defaults.yaml"),
             ("Ctrl+T", "edit templates.yaml"),
             ("Esc", "cancel"),

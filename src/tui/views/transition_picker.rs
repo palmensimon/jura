@@ -44,11 +44,11 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
     }
     match key.code {
         KeyCode::Esc => {
-            go_back(app);
+            go_back(app, state);
         }
         KeyCode::Backspace => {
             if state.search.is_empty() {
-                go_back(app);
+                go_back(app, state);
             } else {
                 state.search.pop();
                 clamp_selected(state, &app.available_transitions);
@@ -99,8 +99,10 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
     }
 }
 
-fn go_back(app: &mut App) {
-    if let AppView::TransitionPicker { issue } = &app.view {
+fn go_back(app: &mut App, state: &TransitionState) {
+    if state.return_to_list {
+        app.view = AppView::TicketList;
+    } else if let AppView::TransitionPicker { issue } = &app.view {
         let issue = issue.clone();
         app.view = AppView::TicketDetail { issue };
     }

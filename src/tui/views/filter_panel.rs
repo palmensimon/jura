@@ -8,6 +8,7 @@ use ratatui::{
 };
 use tui_textarea::TextArea;
 
+use crate::config::TeamEntry;
 use crate::tui::app::{App, FilterState, SortBy, SortDir};
 
 // ── Row enum ─────────────────────────────────────────────────────────────────
@@ -16,10 +17,10 @@ use crate::tui::app::{App, FilterState, SortBy, SortDir};
 pub enum ActiveRow {
     TextSearch,
     Status,
+    HiddenStatus,
     Component,
     Labels,
     Team,
-    HideDone,
     AssignedToMe,
     SprintActive,
     SortBy,
@@ -33,10 +34,10 @@ impl ActiveRow {
         match self {
             ActiveRow::TextSearch => 0,
             ActiveRow::Status => 1,
-            ActiveRow::Component => 2,
-            ActiveRow::Labels => 3,
-            ActiveRow::Team => 4,
-            ActiveRow::HideDone => 5,
+            ActiveRow::HiddenStatus => 2,
+            ActiveRow::Component => 3,
+            ActiveRow::Labels => 4,
+            ActiveRow::Team => 5,
             ActiveRow::AssignedToMe => 6,
             ActiveRow::SprintActive => 7,
             ActiveRow::SortBy => 8,
@@ -48,10 +49,10 @@ impl ActiveRow {
         match i % ROW_COUNT {
             0 => ActiveRow::TextSearch,
             1 => ActiveRow::Status,
-            2 => ActiveRow::Component,
-            3 => ActiveRow::Labels,
-            4 => ActiveRow::Team,
-            5 => ActiveRow::HideDone,
+            2 => ActiveRow::HiddenStatus,
+            3 => ActiveRow::Component,
+            4 => ActiveRow::Labels,
+            5 => ActiveRow::Team,
             6 => ActiveRow::AssignedToMe,
             7 => ActiveRow::SprintActive,
             8 => ActiveRow::SortBy,
@@ -65,16 +66,19 @@ impl ActiveRow {
 pub struct FilterPanelState {
     pub text_input: TextArea<'static>,
     pub status_cursor: usize,
+    pub hidden_status_cursor: usize,
     pub component_cursor: usize,
-    pub labels_input: TextArea<'static>,
-    pub team_input: TextArea<'static>,
-    pub hide_done: bool,
+    pub labels_cursor: usize,
+    pub team_cursor: usize,
     pub assigned_to_me: bool,
     pub sprint_active_only: bool,
     pub sort_by: SortBy,
     pub sort_dir: SortDir,
     pub selected_statuses: Vec<String>,
+    pub hidden_statuses: Vec<String>,
+    pub selected_labels: Vec<String>,
     pub selected_component: Option<String>,
+    pub selected_team: Option<String>,
     pub active_row: ActiveRow,
     pub text_editing: bool,
 }
@@ -88,34 +92,22 @@ impl FilterPanelState {
             text_input.move_cursor(tui_textarea::CursorMove::End);
         }
 
-        let labels_text = filter.labels.join(", ");
-        let mut labels_input = TextArea::default();
-        labels_input.set_placeholder_text("label1, label2, …");
-        if !labels_text.is_empty() {
-            labels_input = TextArea::from([labels_text.as_str()]);
-            labels_input.move_cursor(tui_textarea::CursorMove::End);
-        }
-
-        let mut team_input = TextArea::default();
-        team_input.set_placeholder_text("team ID or name (e.g. 49)");
-        if let Some(team) = &filter.team {
-            team_input = TextArea::from([team.as_str()]);
-            team_input.move_cursor(tui_textarea::CursorMove::End);
-        }
-
         Self {
             text_input,
             status_cursor: 0,
+            hidden_status_cursor: 0,
             component_cursor: 0,
-            labels_input,
-            team_input,
-            hide_done: filter.hide_done,
+            labels_cursor: 0,
+            team_cursor: 0,
             assigned_to_me: filter.assigned_to_me,
             sprint_active_only: filter.sprint_active_only,
             sort_by: filter.sort_by,
             sort_dir: filter.sort_dir,
             selected_statuses: filter.selected_statuses.clone(),
+            hidden_statuses: filter.hidden_statuses.clone(),
+            selected_labels: filter.labels.clone(),
             selected_component: filter.component.clone(),
+            selected_team: filter.team.clone(),
             active_row: ActiveRow::TextSearch,
             text_editing: false,
         }
@@ -130,36 +122,16 @@ impl FilterPanelState {
             .unwrap_or_default()
             .trim()
             .to_string();
-        let labels: Vec<String> = self
-            .labels_input
-            .lines()
-            .first()
-            .cloned()
-            .unwrap_or_default()
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        let team_raw = self
-            .team_input
-            .lines()
-            .first()
-            .cloned()
-            .unwrap_or_default()
-            .trim()
-            .to_string();
-        let team = if team_raw.is_empty() { None } else { Some(team_raw) };
 
         FilterState {
             project: base.project.clone(),
             component: self.selected_component.clone(),
             selected_statuses: self.selected_statuses.clone(),
+            hidden_statuses: self.hidden_statuses.clone(),
             text_search,
-            labels,
-            team,
+            labels: self.selected_labels.clone(),
+            team: self.selected_team.clone(),
             sprint_active_only: self.sprint_active_only,
-            hide_done: self.hide_done,
             assigned_to_me: self.assigned_to_me,
             sort_by: self.sort_by,
             sort_dir: self.sort_dir,
@@ -197,10 +169,10 @@ pub fn handle_key(
         let target = match key.code {
             KeyCode::Char('1') => Some(ActiveRow::TextSearch),
             KeyCode::Char('2') => Some(ActiveRow::Status),
-            KeyCode::Char('3') => Some(ActiveRow::Component),
-            KeyCode::Char('4') => Some(ActiveRow::Labels),
-            KeyCode::Char('5') => Some(ActiveRow::Team),
-            KeyCode::Char('6') => Some(ActiveRow::HideDone),
+            KeyCode::Char('3') => Some(ActiveRow::HiddenStatus),
+            KeyCode::Char('4') => Some(ActiveRow::Component),
+            KeyCode::Char('5') => Some(ActiveRow::Labels),
+            KeyCode::Char('6') => Some(ActiveRow::Team),
             KeyCode::Char('7') => Some(ActiveRow::AssignedToMe),
             KeyCode::Char('8') => Some(ActiveRow::SprintActive),
             KeyCode::Char('9') => Some(ActiveRow::SortBy),
@@ -265,6 +237,14 @@ pub fn handle_key(
                 &mut state.selected_statuses,
             );
         }
+        ActiveRow::HiddenStatus => {
+            handle_multiselect_key(
+                key,
+                &app.hidden_status_options,
+                &mut state.hidden_status_cursor,
+                &mut state.hidden_statuses,
+            );
+        }
         ActiveRow::Component => {
             handle_component_key(
                 key,
@@ -274,23 +254,20 @@ pub fn handle_key(
             );
         }
         ActiveRow::Labels => {
-            if state.text_editing {
-                state.labels_input.input(key);
-            } else if key.code == KeyCode::Char(' ') {
-                state.text_editing = true;
-            }
+            handle_multiselect_key(
+                key,
+                &app.config.defaults.visible_labels,
+                &mut state.labels_cursor,
+                &mut state.selected_labels,
+            );
         }
         ActiveRow::Team => {
-            if state.text_editing {
-                state.team_input.input(key);
-            } else if key.code == KeyCode::Char(' ') {
-                state.text_editing = true;
-            }
-        }
-        ActiveRow::HideDone => {
-            if key.code == KeyCode::Char(' ') {
-                state.hide_done = !state.hide_done;
-            }
+            handle_team_key(
+                key,
+                &app.config.defaults.visible_teams,
+                &mut state.team_cursor,
+                &mut state.selected_team,
+            );
         }
         ActiveRow::AssignedToMe => {
             if key.code == KeyCode::Char(' ') {
@@ -344,6 +321,35 @@ fn handle_multiselect_key(
                 } else {
                     selected.push(opt.clone());
                 }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn handle_team_key(
+    key: KeyEvent,
+    teams: &[TeamEntry],
+    cursor: &mut usize,
+    selected: &mut Option<String>,
+) {
+    let total = teams.len() + 1;
+    match key.code {
+        KeyCode::Left => {
+            if *cursor > 0 {
+                *cursor -= 1;
+            }
+        }
+        KeyCode::Right => {
+            if *cursor + 1 < total {
+                *cursor += 1;
+            }
+        }
+        KeyCode::Char(' ') => {
+            if *cursor == 0 {
+                *selected = None;
+            } else {
+                *selected = teams.get(*cursor - 1).map(|t| t.id.clone());
             }
         }
         _ => {}
@@ -415,10 +421,10 @@ pub fn draw(app: &App, state: &mut FilterPanelState, frame: &mut Frame, area: Re
         .constraints([
             Constraint::Length(3), // text search
             Constraint::Length(5), // status
+            Constraint::Length(5), // hidden statuses
             Constraint::Length(5), // component
-            Constraint::Length(3), // labels
-            Constraint::Length(3), // team
-            Constraint::Length(3), // hide_done
+            Constraint::Length(5), // labels
+            Constraint::Length(5), // team
             Constraint::Length(3), // assigned_to_me
             Constraint::Length(3), // sprint_active
             Constraint::Length(3), // sort
@@ -453,6 +459,23 @@ pub fn draw(app: &App, state: &mut FilterPanelState, frame: &mut Frame, area: Re
         chunks[1],
     );
 
+    // ── Hidden statuses multi-select ──────────────────────────────────────────
+    if !app.hidden_status_options.is_empty() && state.hidden_status_cursor >= app.hidden_status_options.len() {
+        state.hidden_status_cursor = app.hidden_status_options.len() - 1;
+    }
+    frame.render_widget(
+        Paragraph::new(option_list_text(
+            &app.hidden_status_options,
+            &state.hidden_statuses,
+            state.hidden_status_cursor,
+            state.active_row == ActiveRow::HiddenStatus,
+            false,
+        ))
+        .block(focused_block(" [3] Hidden statuses ", state.active_row == ActiveRow::HiddenStatus))
+        .wrap(Wrap { trim: false }),
+        chunks[2],
+    );
+
     // ── Component single-select ───────────────────────────────────────────────
     let comp_total = app.available_components.len() + 1;
     if state.component_cursor >= comp_total {
@@ -473,32 +496,59 @@ pub fn draw(app: &App, state: &mut FilterPanelState, frame: &mut Frame, area: Re
             state.active_row == ActiveRow::Component,
             true,
         ))
-        .block(focused_block(" [3] Component ", state.active_row == ActiveRow::Component))
+        .block(focused_block(" [4] Component ", state.active_row == ActiveRow::Component))
         .wrap(Wrap { trim: false }),
-        chunks[2],
+        chunks[3],
     );
 
-    // ── Labels ────────────────────────────────────────────────────────────────
-    update_textarea_block(
-        &mut state.labels_input,
-        " [4] Labels ",
-        state.active_row == ActiveRow::Labels,
-        state.text_editing && state.active_row == ActiveRow::Labels,
+    // ── Labels multi-select ───────────────────────────────────────────────────
+    let visible_labels = &app.config.defaults.visible_labels;
+    if !visible_labels.is_empty() && state.labels_cursor >= visible_labels.len() {
+        state.labels_cursor = visible_labels.len() - 1;
+    }
+    frame.render_widget(
+        Paragraph::new(option_list_text(
+            visible_labels,
+            &state.selected_labels,
+            state.labels_cursor,
+            state.active_row == ActiveRow::Labels,
+            false,
+        ))
+        .block(focused_block(" [5] Labels ", state.active_row == ActiveRow::Labels))
+        .wrap(Wrap { trim: false }),
+        chunks[4],
     );
-    frame.render_widget(&state.labels_input, chunks[3]);
 
-    // ── Team ──────────────────────────────────────────────────────────────────
-    update_textarea_block(
-        &mut state.team_input,
-        " [5] Team ",
-        state.active_row == ActiveRow::Team,
-        state.text_editing && state.active_row == ActiveRow::Team,
+    // ── Team single-select ────────────────────────────────────────────────────
+    let visible_teams = &app.config.defaults.visible_teams;
+    let team_total = visible_teams.len() + 1;
+    if state.team_cursor >= team_total {
+        state.team_cursor = 0;
+    }
+    let team_options: Vec<String> = std::iter::once("(all)".to_string())
+        .chain(visible_teams.iter().map(|t| t.name.clone()))
+        .collect();
+    let team_selected: Vec<String> = match &state.selected_team {
+        None => vec!["(all)".to_string()],
+        Some(id) => visible_teams.iter()
+            .find(|t| &t.id == id)
+            .map(|t| vec![t.name.clone()])
+            .unwrap_or_default(),
+    };
+    frame.render_widget(
+        Paragraph::new(option_list_text(
+            &team_options,
+            &team_selected,
+            state.team_cursor,
+            state.active_row == ActiveRow::Team,
+            true,
+        ))
+        .block(focused_block(" [6] Team ", state.active_row == ActiveRow::Team))
+        .wrap(Wrap { trim: false }),
+        chunks[5],
     );
-    frame.render_widget(&state.team_input, chunks[4]);
 
     // ── Bool toggles ──────────────────────────────────────────────────────────
-    draw_toggle(frame, chunks[5], "Hide done tickets", 6, state.hide_done,
-        state.active_row == ActiveRow::HideDone);
     draw_toggle(frame, chunks[6], "Assigned to me", 7, state.assigned_to_me,
         state.active_row == ActiveRow::AssignedToMe);
     draw_toggle(frame, chunks[7], "Sprint active only", 8, state.sprint_active_only,

@@ -179,7 +179,7 @@ pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
 
     let hints: &[(&str, &str)] = &[
         ("t", "status"),
-        ("b", "branch"),
+        ("Space", "checkout"),
         ("o", "browser"),
         ("?", "help"),
         ("Esc", "back"),

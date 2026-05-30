@@ -155,11 +155,11 @@ pub struct FilterState {
     pub project: Option<String>,
     pub component: Option<String>,
     pub selected_statuses: Vec<String>,
+    pub hidden_statuses: Vec<String>,
     pub text_search: String,
     pub labels: Vec<String>,
     pub team: Option<String>,
     pub sprint_active_only: bool,
-    pub hide_done: bool,
     pub assigned_to_me: bool,
     pub sort_by: SortBy,
     pub sort_dir: SortDir,
@@ -190,10 +190,13 @@ impl FilterState {
                 .collect::<Vec<_>>()
                 .join(",");
             conditions.push(format!("status in ({joined})"));
-        } else if self.hide_done {
-            conditions.push(
-                "status not in (\"Done\",\"Closed\",\"Resolved\")".to_string(),
-            );
+        } else if !self.hidden_statuses.is_empty() {
+            let joined = self.hidden_statuses
+                .iter()
+                .map(|s| format!("\"{s}\""))
+                .collect::<Vec<_>>()
+                .join(",");
+            conditions.push(format!("status not in ({joined})"));
         }
         if self.assigned_to_me {
             conditions.push("assignee = currentUser()".to_string());
@@ -241,12 +244,12 @@ impl FilterState {
             project: config.defaults.project.clone(),
             component: df.component.clone(),
             selected_statuses,
+            hidden_statuses: config.defaults.hidden_statuses.clone(),
             text_search: String::new(),
             labels: df.labels.clone(),
             team: df.team.clone(),
             sprint_active_only: df.sprint_active_only,
-            hide_done: config.defaults.hide_done,
-            assigned_to_me: config.defaults.assigned_to_me,
+            assigned_to_me: false,
             sort_by: SortBy::from_str(&df.sort_by),
             sort_dir: SortDir::from_str(&df.sort_dir),
         }
@@ -259,11 +262,11 @@ impl Default for FilterState {
             project: None,
             component: None,
             selected_statuses: vec![],
+            hidden_statuses: vec!["Done".to_string(), "Closed".to_string(), "Resolved".to_string()],
             text_search: String::new(),
             labels: vec![],
             team: None,
             sprint_active_only: false,
-            hide_done: true,
             assigned_to_me: false,
             sort_by: SortBy::default(),
             sort_dir: SortDir::default(),
@@ -286,6 +289,8 @@ pub struct App {
     pub client: Arc<JiraClient>,
     pub event_tx: mpsc::Sender<AppEvent>,
     pub available_statuses: Vec<String>,
+    pub all_statuses: Vec<String>,
+    pub hidden_status_options: Vec<String>,
     pub available_components: Vec<String>,
     pub available_transitions: Vec<Transition>,
     pub show_help: bool,
@@ -317,6 +322,8 @@ impl App {
             client: Arc::new(client),
             event_tx,
             available_statuses: vec![],
+            all_statuses: vec![],
+            hidden_status_options: vec![],
             available_components: vec![],
             available_transitions: vec![],
             show_help: false,
@@ -391,10 +398,15 @@ impl App {
             AppEvent::FilterOptions { statuses, components } => {
                 let vs = &self.config.defaults.visible_statuses;
                 self.available_statuses = if vs.is_empty() {
-                    statuses
+                    statuses.clone()
                 } else {
-                    statuses.into_iter().filter(|s| vs.contains(s)).collect()
+                    statuses.iter().filter(|s| vs.contains(s)).cloned().collect()
                 };
+                self.hidden_status_options = statuses.iter()
+                    .filter(|s| self.config.defaults.hidden_statuses.contains(s))
+                    .cloned()
+                    .collect();
+                self.all_statuses = statuses;
                 let vc = &self.config.defaults.visible_components;
                 self.available_components = if vc.is_empty() {
                     components
@@ -444,10 +456,13 @@ impl App {
 
     pub fn mine_jql(&self) -> String {
         let mut conditions = vec!["assignee = currentUser()".to_string()];
-        if self.filter.hide_done {
-            conditions.push(
-                "status not in (\"Done\",\"Closed\",\"Resolved\")".to_string(),
-            );
+        if !self.filter.hidden_statuses.is_empty() {
+            let joined = self.filter.hidden_statuses
+                .iter()
+                .map(|s| format!("\"{s}\""))
+                .collect::<Vec<_>>()
+                .join(",");
+            conditions.push(format!("status not in ({joined})"));
         }
         format!("{} ORDER BY updated DESC", conditions.join(" AND "))
     }
@@ -595,8 +610,19 @@ impl App {
 }
 
 fn issue_matches(issue: &Issue, q: &str) -> bool {
-    issue.key.to_lowercase().contains(q)
-        || issue.summary().to_lowercase().contains(q)
-        || issue.issue_type().to_lowercase().contains(q)
-        || issue.assignee().to_lowercase().contains(q)
+    let key = issue.key.to_lowercase();
+    let summary = issue.summary().to_lowercase();
+    let issue_type = issue.issue_type().to_lowercase();
+    let assignee = issue.assignee().to_lowercase();
+    let status = issue.status().to_lowercase();
+    let components: Vec<String> = issue.component_names().iter().map(|c| c.to_lowercase()).collect();
+
+    q.split_whitespace().all(|token| {
+        key.contains(token)
+            || summary.contains(token)
+            || issue_type.contains(token)
+            || assignee.contains(token)
+            || status.contains(token)
+            || components.iter().any(|c| c.contains(token))
+    })
 }

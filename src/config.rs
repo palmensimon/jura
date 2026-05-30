@@ -26,11 +26,10 @@ pub struct Defaults {
     #[serde(default)]
     pub status_filter: Option<String>,
     #[serde(default)]
-    pub assigned_to_me: bool,
-    #[serde(default)]
     pub assign_on_checkout: bool,
-    #[serde(default = "default_true")]
-    pub hide_done: bool,
+    /// Statuses excluded from results when no explicit status filter is active (empty = hide nothing)
+    #[serde(default = "default_hidden_statuses")]
+    pub hidden_statuses: Vec<String>,
     #[serde(default)]
     pub default_filter: DefaultFilter,
     /// Only show these statuses in the filter panel (empty = show all)
@@ -39,10 +38,22 @@ pub struct Defaults {
     /// Only show these components in the filter panel (empty = show all)
     #[serde(default)]
     pub visible_components: Vec<String>,
+    /// Labels available as options in the filter panel (empty = text input not shown)
+    #[serde(default)]
+    pub visible_labels: Vec<String>,
+    /// Teams available as options in the filter panel (empty = no team filter shown)
+    #[serde(default)]
+    pub visible_teams: Vec<TeamEntry>,
 }
 
-fn default_true() -> bool {
-    true
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TeamEntry {
+    pub id: String,
+    pub name: String,
+}
+
+fn default_hidden_statuses() -> Vec<String> {
+    vec!["Done".to_string(), "Closed".to_string(), "Resolved".to_string()]
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -184,25 +195,30 @@ pub fn write_example_config() -> Result<()> {
             &user_defaults_path,
             r#"defaults:
   # Jira project key to filter by default (e.g. "PROJ")
-  project: "PROJ"
+  project: ~
 
   # Maximum number of tickets to fetch
   max_results: 50
 
-  # Hide tickets with status Done/Closed/Resolved
-  hide_done: true
-
-  # Only show tickets assigned to you by default
-  assigned_to_me: false
+  # Statuses hidden from results when no explicit status filter is active (empty = hide nothing)
+  # These also appear as toggleable options in the filter panel [3] Hidden statuses row.
+  hidden_statuses: []
 
   # Automatically assign yourself when checking out a branch
   assign_on_checkout: false
 
-  # Restrict which statuses appear in the filter panel (empty = show all)
+  # Restrict which statuses appear in the [2] Status filter row (empty = show all)
   visible_statuses: []
 
-  # Restrict which components appear in the filter panel (empty = show all)
+  # Restrict which components appear in the [4] Component filter row (empty = show all)
   visible_components: []
+
+  # Labels shown as selectable options in the [5] Labels filter row (empty = row hidden)
+  visible_labels: []
+
+  # Teams shown as selectable options in the [6] Team filter row (empty = row hidden)
+  # Each entry needs an id (the value sent to Jira) and a name (shown in the UI).
+  visible_teams: []
 
   # Default filter applied on startup
   default_filter:
@@ -213,6 +229,43 @@ pub fn write_example_config() -> Result<()> {
     sprint_active_only: false
     sort_by: "updated"   # updated | created | priority
     sort_dir: "desc"     # desc | asc
+
+# ── Example filled configuration ─────────────────────────────────────────────
+#
+# defaults:
+#   project: "SWISH"
+#   max_results: 200
+#   hidden_statuses:
+#     - "Won't Do"
+#     - "Done"
+#   assign_on_checkout: true
+#   visible_statuses:
+#     - "Backlog"
+#     - "To Do"
+#     - "In Progress"
+#     - "Review"
+#     - "Done"
+#   visible_components:
+#     - "private-app-android"
+#     - "private-app-ios"
+#   visible_labels:
+#     - "bug"
+#     - "frontend"
+#     - "backend"
+#     - "tech-debt"
+#   visible_teams:
+#     - id: "49"
+#       name: "Mobile"
+#     - id: "12"
+#       name: "Platform"
+#   default_filter:
+#     statuses: []
+#     component: ~
+#     labels: []
+#     team: "49"
+#     sprint_active_only: true
+#     sort_by: "updated"
+#     sort_dir: "desc"
 "#,
         )?;
         eprintln!("Created example user_defaults at {}", user_defaults_path.display());

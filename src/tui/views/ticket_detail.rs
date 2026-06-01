@@ -78,15 +78,24 @@ pub fn handle_branch_picker_key(app: &mut App, state: &mut DetailState, key: Key
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if let BranchPickState::Picking { selected, branches, .. } = &mut state.branch_pick {
-                if *selected + 1 < branches.len() { *selected += 1; }
+                if *selected + 1 < branches.len() + 1 { *selected += 1; }
             }
         }
         KeyCode::Enter => {
             if let BranchPickState::Picking { branches, selected, issue } = &state.branch_pick {
-                let branch = branches[*selected].clone();
-                let issue = issue.clone();
-                state.branch_pick = BranchPickState::Idle;
-                app.spawn_checkout(branch, &issue);
+                let sel = *selected;
+                if sel < branches.len() {
+                    let branch = branches[sel].clone();
+                    let issue = issue.clone();
+                    state.branch_pick = BranchPickState::Idle;
+                    app.spawn_checkout(branch, &issue);
+                } else {
+                    let issue = issue.clone();
+                    let suggested = branch_name(&issue.key, issue.summary());
+                    let mut ta = TextArea::from([suggested.as_str()]);
+                    ta.move_cursor(tui_textarea::CursorMove::End);
+                    state.branch_pick = BranchPickState::Editing { input: ta, issue };
+                }
             }
         }
         _ => {}
@@ -351,8 +360,8 @@ pub fn draw_branch_editor(state: &mut DetailState, frame: &mut Frame, area: Rect
 pub fn draw_branch_picker(state: &DetailState, frame: &mut Frame, area: Rect) {
     let BranchPickState::Picking { branches, selected, .. } = &state.branch_pick else { return; };
 
-    let inner_h = branches.len() as u16;
-    let popup_h = (inner_h + 2).min(area.height.saturating_sub(4));
+    let total = branches.len() + 1; // +1 for "create new" entry
+    let popup_h = (total as u16 + 2).min(area.height.saturating_sub(4));
     let popup_w = area.width.saturating_sub(8).min(90);
     let x = area.x + area.width.saturating_sub(popup_w) / 2;
     let y = area.y + area.height.saturating_sub(popup_h) / 2;
@@ -360,7 +369,8 @@ pub fn draw_branch_picker(state: &DetailState, frame: &mut Frame, area: Rect) {
 
     frame.render_widget(Clear, popup);
 
-    let items: Vec<Line> = branches.iter().enumerate().map(|(i, b)| {
+    let create_idx = branches.len();
+    let mut items: Vec<Line> = branches.iter().enumerate().map(|(i, b)| {
         if i == *selected {
             Line::from(Span::styled(
                 format!(" ▶ {b}"),
@@ -370,6 +380,17 @@ pub fn draw_branch_picker(state: &DetailState, frame: &mut Frame, area: Rect) {
             Line::from(Span::raw(format!("   {b}")))
         }
     }).collect();
+    if *selected == create_idx {
+        items.push(Line::from(Span::styled(
+            " ▶ + Create new branch…",
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        )));
+    } else {
+        items.push(Line::from(Span::styled(
+            "   + Create new branch…",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
 
     let block = Block::default()
         .borders(Borders::ALL)

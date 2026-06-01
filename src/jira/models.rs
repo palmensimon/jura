@@ -159,40 +159,6 @@ pub struct SearchResult {
     pub max_results: u32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct Board {
-    pub id: u64,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub board_type: String,
-    pub location: Option<BoardLocation>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct BoardLocation {
-    #[serde(rename = "projectKey")]
-    pub project_key: Option<String>,
-    #[serde(rename = "projectName")]
-    pub project_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct BoardList {
-    pub values: Vec<Board>,
-    pub total: Option<u32>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Sprint {
-    pub id: u64,
-    pub name: String,
-    pub state: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct SprintList {
-    pub values: Vec<Sprint>,
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CreateIssueRequest {

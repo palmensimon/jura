@@ -16,11 +16,13 @@ use crate::{
 const F_BASE_URL: usize = 0;
 const F_TOKEN: usize = 1;
 const F_PROJECT: usize = 2;
-const FIELD_COUNT: usize = 3;
+const F_SPRINT: usize = 3;
+const FIELD_COUNT: usize = 4;
 
 pub struct SettingsState {
     inputs: [TextArea<'static>; FIELD_COUNT],
     active: usize,
+    editing: bool,
 }
 
 impl SettingsState {
@@ -29,30 +31,23 @@ impl SettingsState {
         inputs[F_BASE_URL] = single_line_area(&config.jira.base_url);
         inputs[F_TOKEN] = single_line_area(&config.jira.token);
         inputs[F_PROJECT] = single_line_area(config.defaults.project.as_deref().unwrap_or(""));
+        inputs[F_SPRINT] = single_line_area(&config.active_sprint_id.map(|id| id.to_string()).unwrap_or_default());
 
-        let mut state = Self { inputs, active: 0 };
+        let mut state = Self { inputs, active: 0, editing: false };
         state.refresh_styles();
         state
     }
 
     fn refresh_styles(&mut self) {
         for (i, input) in self.inputs.iter_mut().enumerate() {
-            let is_active = i == self.active;
-            let label = field_label(i);
-            input.set_block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!(" {label} "))
-                    .border_style(if is_active {
-                        Style::default().fg(Color::Yellow)
-                    } else {
-                        Style::default().fg(Color::DarkGray)
-                    }),
-            );
+            let focused = i == self.active;
+            let editing = focused && self.editing;
+            update_field_block(input, field_label(i), focused, editing);
         }
     }
 
     fn move_to(&mut self, idx: usize) {
+        self.editing = false;
         self.active = idx;
         self.refresh_styles();
     }
@@ -73,16 +68,23 @@ impl SettingsState {
         let base_url = self.first_line(F_BASE_URL);
         let token = self.first_line(F_TOKEN);
         let project = self.first_line(F_PROJECT);
+        let sprint = self.first_line(F_SPRINT);
         if base_url.is_empty() {
             return Err("Base URL is required".to_string());
         }
         if token.is_empty() {
             return Err("Token / PAT is required".to_string());
         }
+        let active_sprint_id = if sprint.is_empty() {
+            None
+        } else {
+            Some(sprint.parse::<u64>().map_err(|_| "Active Sprint ID must be a number".to_string())?)
+        };
         let mut defaults = existing.defaults.clone();
         defaults.project = if project.is_empty() { None } else { Some(project) };
         Ok(Config {
             jira: JiraConfig { base_url, token },
+            active_sprint_id,
             defaults,
         })
     }
@@ -91,8 +93,7 @@ impl SettingsState {
 // ── Key handling ─────────────────────────────────────────────────────────────
 
 pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
-    let is_save = key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL);
-    if is_save {
+    if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
         match state.build_config(&app.config) {
             Ok(new_cfg) => {
                 let save_result = save_config(&new_cfg)
@@ -112,21 +113,33 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
         return;
     }
 
+    if state.editing {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => {
+                state.editing = false;
+                state.refresh_styles();
+            }
+            _ => { state.inputs[state.active].input(key); }
+        }
+        return;
+    }
+
     match key.code {
         KeyCode::Esc => {
             app.view = AppView::TicketList;
             app.error = None;
         }
-        KeyCode::Tab => state.move_next(),
-        KeyCode::BackTab => state.move_prev(),
-        KeyCode::Up => state.move_prev(),
-        KeyCode::Down => state.move_next(),
+        KeyCode::Char(' ') => {
+            state.editing = true;
+            state.refresh_styles();
+        }
+        KeyCode::Tab | KeyCode::Down => state.move_next(),
+        KeyCode::BackTab | KeyCode::Up => state.move_prev(),
         KeyCode::Char('1') => state.move_to(F_BASE_URL),
         KeyCode::Char('2') => state.move_to(F_TOKEN),
         KeyCode::Char('3') => state.move_to(F_PROJECT),
-        _ => {
-            state.inputs[state.active].input(key);
-        }
+        KeyCode::Char('4') => state.move_to(F_SPRINT),
+        _ => {}
     }
 }
 
@@ -140,6 +153,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
             Constraint::Length(3), // base_url
             Constraint::Length(3), // token
             Constraint::Length(3), // project
+            Constraint::Length(3), // active_sprint_id
             Constraint::Min(0),    // user_settings.yaml info
             Constraint::Length(2), // footer bar
         ])
@@ -162,6 +176,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
     frame.render_widget(&state.inputs[F_BASE_URL], chunks[1]);
     frame.render_widget(&state.inputs[F_TOKEN], chunks[2]);
     frame.render_widget(&state.inputs[F_PROJECT], chunks[3]);
+    frame.render_widget(&state.inputs[F_SPRINT], chunks[4]);
 
     // Info block
     let user_settings_file = crate::config::user_settings_path();
@@ -176,7 +191,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
             Span::styled(templates_file.display().to_string(), Style::default().fg(Color::Cyan)),
         ]),
     ];
-    frame.render_widget(Paragraph::new(info_lines), chunks[4]);
+    frame.render_widget(Paragraph::new(info_lines), chunks[5]);
 
     // Footer — error or config file path
     let footer_content = if let Some(err) = &app.error {
@@ -191,7 +206,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
                 .borders(Borders::TOP)
                 .border_style(Style::default().fg(Color::DarkGray)),
         ),
-        chunks[5],
+        chunks[6],
     );
 }
 
@@ -202,7 +217,29 @@ fn field_label(idx: usize) -> &'static str {
         F_BASE_URL => "[1] Base URL",
         F_TOKEN => "[2] Token / PAT",
         F_PROJECT => "[3] Default Project",
+        F_SPRINT => "[4] Active Sprint ID",
         _ => "",
+    }
+}
+
+fn update_field_block(ta: &mut TextArea<'static>, label: &str, focused: bool, editing: bool) {
+    let border_style = if editing {
+        Style::default().fg(Color::Green)
+    } else if focused {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let title = if focused && !editing {
+        format!(" {label} — Space to edit ")
+    } else {
+        format!(" {label} ")
+    };
+    ta.set_block(Block::default().borders(Borders::ALL).title(title).border_style(border_style));
+    if editing {
+        ta.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
+    } else {
+        ta.set_cursor_style(Style::default());
     }
 }
 

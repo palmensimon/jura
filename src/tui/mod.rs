@@ -272,12 +272,8 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                             ta.move_cursor(tui_textarea::CursorMove::End);
                                             detail_state.branch_pick = BranchPickState::Editing { input: ta, issue };
                                         }
-                                        1 => {
-                                            app.spawn_checkout(branches.into_iter().next().unwrap(), &issue);
-                                        }
-                                        _ => {
-                                            detail_state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
-                                        }
+                                        1 => app.spawn_checkout(branches.into_iter().next().unwrap(), &issue),
+                                        _ => detail_state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue },
                                     }
                                 }
                             } else if key.code == KeyCode::Char('a') && !app.active_tab().local_search_active {

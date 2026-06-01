@@ -167,12 +167,8 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
                         ta.move_cursor(tui_textarea::CursorMove::End);
                         state.branch_pick = BranchPickState::Editing { input: ta, issue };
                     }
-                    1 => {
-                        app.spawn_checkout(branches.into_iter().next().unwrap(), &issue);
-                    }
-                    _ => {
-                        state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
-                    }
+                    1 => app.spawn_checkout(branches.into_iter().next().unwrap(), &issue),
+                    _ => state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue },
                 }
             }
         }

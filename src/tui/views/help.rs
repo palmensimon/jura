@@ -216,12 +216,12 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
         AppView::FilterPanel => &[
             ("Space", "toggle"),
             ("Enter", "apply"),
-            ("Ctrl+S", "save defaults"),
+            ("Ctrl+S", "save settings"),
             ("?", "help"),
         ],
         AppView::Settings => &[
             ("Ctrl+S", "save"),
-            ("Ctrl+D", "edit defaults"),
+            ("Ctrl+D", "edit settings"),
             ("Ctrl+T", "edit templates"),
             ("?", "help"),
         ],

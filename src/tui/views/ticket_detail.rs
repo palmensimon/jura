@@ -9,7 +9,7 @@ use ratatui::{
 use tui_textarea::TextArea;
 
 use crate::{
-    git::{branch_name, find_branch_for_ticket, new_pr_url},
+    git::{branch_name, find_branch_for_ticket, new_pr_url, open_url},
     jira::Issue,
     tui::app::{App, AppView},
 };
@@ -83,7 +83,7 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
         KeyCode::Char('b') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let url = format!("{}/browse/{}", app.config.jira.base_url, issue.key);
-                let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                let _ = open_url(&url);
             }
         }
         KeyCode::Char('o') => {
@@ -92,7 +92,7 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
                     None => app.error = Some(format!("No local branch found for {}", issue.key)),
                     Some(branch) => match new_pr_url(&branch) {
                         None => app.error = Some("Could not build PR URL — unknown remote or no origin".to_string()),
-                        Some(url) => { let _ = std::process::Command::new("xdg-open").arg(&url).spawn(); }
+                        Some(url) => { let _ = open_url(&url); }
                     },
                 }
             }

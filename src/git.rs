@@ -149,6 +149,39 @@ pub fn checkout_branch(branch: &str) -> Result<()> {
     Ok(())
 }
 
+/// Opens a URL in the default browser, using the appropriate command for the OS.
+pub fn open_url(url: &str) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+
+    #[cfg(target_os = "linux")]
+    let cmd = "xdg-open";
+
+    #[cfg(target_os = "windows")]
+    let cmd = "cmd";
+
+    #[cfg(target_os = "windows")]
+    let output = Command::new(cmd)
+        .args(["/C", "start", url])
+        .output()
+        .context("Failed to open URL")?;
+
+    #[cfg(not(target_os = "windows"))]
+    let output = Command::new(cmd)
+        .arg(url)
+        .output()
+        .context("Failed to open URL")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to open URL: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

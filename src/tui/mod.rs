@@ -31,7 +31,7 @@ use views::{
 
 use crate::{
     config::{Config, DefaultFilter, Templates, config_dir, save_settings},
-    git::{branch_name, find_branch_for_ticket, new_pr_url},
+    git::{branch_name, find_branch_for_ticket, new_pr_url, open_url},
     jira::JiraClient,
 };
 
@@ -267,7 +267,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             } else if key.code == KeyCode::Char('b') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue() {
                                     let url = format!("{}/browse/{}", app.config.jira.base_url, issue.key);
-                                    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                                    let _ = open_url(&url);
                                 }
                             } else if key.code == KeyCode::Char('o') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue() {
@@ -276,7 +276,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         None => app.error = Some(format!("No local branch found for {key_str}")),
                                         Some(branch) => match new_pr_url(&branch) {
                                             None => app.error = Some("Could not build PR URL — unknown remote or no origin".to_string()),
-                                            Some(url) => { let _ = std::process::Command::new("xdg-open").arg(&url).spawn(); }
+                                            Some(url) => { let _ = open_url(&url); }
                                         },
                                     }
                                 }

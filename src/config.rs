@@ -39,6 +39,9 @@ pub struct Defaults {
     /// Teams available as options in the filter panel (empty = no team filter shown)
     #[serde(default)]
     pub visible_teams: Vec<TeamEntry>,
+    /// Statuses that trigger auto-assignment to the active sprint on transition (empty = disabled)
+    #[serde(default)]
+    pub sprint_on_transition: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -96,7 +99,7 @@ pub struct TicketTemplate {
     pub assignee: Option<String>,
 }
 
-/// Holds the shareable, team-wide defaults. Serialized as `user_defaults.yaml`.
+/// Holds user-specific settings. Serialized as `user_settings.yaml`.
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct SettingsFile {
     #[serde(default)]
@@ -109,11 +112,11 @@ pub fn config_dir() -> PathBuf {
         .join("jura")
 }
 
-pub fn user_defaults_path() -> PathBuf {
-    config_dir().join("user_defaults.yaml")
+pub fn user_settings_path() -> PathBuf {
+    config_dir().join("user_settings.yaml")
 }
 
-/// Load credentials from `config.yaml`. If `user_defaults.yaml` exists its
+/// Load credentials from `config.yaml`. If `user_settings.yaml` exists its
 /// `defaults` section wins; otherwise the `defaults` block inside `config.yaml`
 /// is used as a backward-compatible fallback.
 pub fn load_config() -> Result<Config> {
@@ -122,23 +125,23 @@ pub fn load_config() -> Result<Config> {
         .with_context(|| format!("Could not read config at {}", path.display()))?;
     let mut config: Config = serde_yaml::from_str(&content).context("Failed to parse config.yaml")?;
 
-    if let Some(sf) = load_user_defaults() {
+    if let Some(sf) = load_user_settings() {
         config.defaults = sf.defaults;
     }
 
     Ok(config)
 }
 
-/// Load `user_defaults.yaml`. Returns `None` if the file doesn't exist yet.
-pub fn load_user_defaults() -> Option<SettingsFile> {
-    let path = user_defaults_path();
+/// Load `user_settings.yaml`. Returns `None` if the file doesn't exist yet.
+pub fn load_user_settings() -> Option<SettingsFile> {
+    let path = user_settings_path();
     if !path.exists() { return None; }
     let content = std::fs::read_to_string(&path).ok()?;
     serde_yaml::from_str(&content).ok()
 }
 
 /// Persist only the Jira credentials to `config.yaml`.
-/// Defaults live in `user_defaults.yaml` and are not written here.
+/// Settings live in `user_settings.yaml` and are not written here.
 pub fn save_config(config: &Config) -> Result<()> {
     #[derive(Serialize)]
     struct CredFile<'a> { jira: &'a JiraConfig }
@@ -151,13 +154,13 @@ pub fn save_config(config: &Config) -> Result<()> {
         .with_context(|| format!("Failed to write config to {}", path.display()))
 }
 
-/// Persist defaults/preferences to `user_defaults.yaml`.
+/// Persist defaults/preferences to `user_settings.yaml`.
 pub fn save_settings(defaults: &Defaults) -> Result<()> {
     let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
     let file = SettingsFile { defaults: defaults.clone() };
-    let yaml = serde_yaml::to_string(&file).context("Failed to serialize user_defaults")?;
-    std::fs::write(user_defaults_path(), yaml).context("Failed to write user_defaults.yaml")
+    let yaml = serde_yaml::to_string(&file).context("Failed to serialize user_settings")?;
+    std::fs::write(user_settings_path(), yaml).context("Failed to write user_settings.yaml")
 }
 
 pub fn load_templates() -> Result<Templates> {
@@ -185,10 +188,10 @@ pub fn write_example_config() -> Result<()> {
         )?;
     }
 
-    let user_defaults_path = dir.join("user_defaults.yaml");
-    if !user_defaults_path.exists() {
+    let user_settings_path = dir.join("user_settings.yaml");
+    if !user_settings_path.exists() {
         std::fs::write(
-            &user_defaults_path,
+            &user_settings_path,
             r#"defaults:
   # Jira project key to filter by default (e.g. "PROJ")
   project: ~
@@ -215,6 +218,10 @@ pub fn write_example_config() -> Result<()> {
   # Teams shown as selectable options in the [6] Team filter row (empty = row hidden)
   # Each entry needs an id (the value sent to Jira) and a name (shown in the UI).
   visible_teams: []
+
+  # Statuses that trigger auto-assignment to the active sprint when transitioning a ticket.
+  # Leave empty (default) to disable. Example: ["To Do", "In Progress", "In Review"]
+  sprint_on_transition: []
 
   # Default filter applied on startup
   default_filter:

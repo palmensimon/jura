@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
                 .unwrap_or_else(|_| dir.display().to_string());
             println!("Config directory: {display}\n");
             println!("  config.yaml          your Jira credentials (edit this first)");
-            println!("  user_defaults.yaml   preferences and filters");
+            println!("  user_settings.yaml   preferences and filters");
             println!("  templates.yaml       create-ticket templates\n");
             println!("Next steps:");
             println!("  1. Edit {display}/config.yaml with your base_url and token");

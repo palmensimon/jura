@@ -69,9 +69,11 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
             let filtered = state.filtered(&app.available_transitions);
             if let Some(transition) = filtered.get(state.selected) {
                 let transition_id = transition.id.clone();
+                let to_status = transition.to.name.clone();
                 let key_str = issue_key(app).to_string();
                 let client = app.client.clone();
                 let tx = app.event_tx.clone();
+                let sprint_triggers = app.config.defaults.sprint_on_transition.clone();
                 state.loading = true;
                 tokio::spawn(async move {
                     match client.do_transition(&key_str, &transition_id).await {
@@ -80,6 +82,9 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
                         }
                         Ok(()) => {
                             let _ = tx.send(AppEvent::TransitionApplied(key_str.clone())).await;
+                            if sprint_triggers.iter().any(|s| s.eq_ignore_ascii_case(&to_status)) {
+                                let _ = client.move_to_active_sprint(&key_str).await;
+                            }
                             match client.get_issue(&key_str).await {
                                 Ok(issue) => {
                                     let _ = tx.send(AppEvent::IssueReloaded(issue)).await;

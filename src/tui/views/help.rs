@@ -82,7 +82,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
                 ("Space", "Toggle"),
                 ("Enter", "Save"),
                 ("r", "Reload config files"),
-                ("Ctrl+D", "Edit user_defaults.yaml"),
+                ("Ctrl+D", "Edit user_settings.yaml"),
                 ("Ctrl+T", "Edit templates.yaml"),
             ],
         ),

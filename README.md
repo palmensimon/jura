@@ -27,7 +27,7 @@ Two files are generated:
 | File | Purpose | Edit via |
 |---|---|---|
 | `config.yaml` | Jira credentials (`base_url`, `token`) | TUI `s` → Settings, or directly |
-| `user_defaults.yaml` | Preferences (`project`, filters, behaviour) | TUI `s` → Settings or `Ctrl+O`, or directly |
+| `user_settings.yaml` | Preferences (`project`, filters, behaviour) | TUI `s` → Settings or `Ctrl+D`, or directly |
 | `templates.yaml` | Create-ticket templates | TUI `s` → `Ctrl+T`, or directly |
 
 ## Usage

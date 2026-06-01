@@ -140,7 +140,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
             Constraint::Length(3), // base_url
             Constraint::Length(3), // token
             Constraint::Length(3), // project
-            Constraint::Min(0),    // user_defaults.yaml info
+            Constraint::Min(0),    // user_settings.yaml info
             Constraint::Length(2), // footer bar
         ])
         .split(area);
@@ -164,12 +164,12 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
     frame.render_widget(&state.inputs[F_PROJECT], chunks[3]);
 
     // Info block
-    let user_defaults_file = crate::config::user_defaults_path();
+    let user_settings_file = crate::config::user_settings_path();
     let templates_file = crate::config::config_dir().join("templates.yaml");
     let info_lines = vec![
         Line::from(vec![
-            Span::styled("  Defaults and filter preferences are configured in ", Style::default().fg(Color::DarkGray)),
-            Span::styled(user_defaults_file.display().to_string(), Style::default().fg(Color::Cyan)),
+            Span::styled("  Settings and filter preferences are configured in ", Style::default().fg(Color::DarkGray)),
+            Span::styled(user_settings_file.display().to_string(), Style::default().fg(Color::Cyan)),
         ]),
         Line::from(vec![
             Span::styled("  Create ticket templates are configured in ", Style::default().fg(Color::DarkGray)),

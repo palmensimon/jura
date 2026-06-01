@@ -204,6 +204,79 @@ impl JiraClient {
         Ok(metas.into_iter().map(|s| s.name).collect())
     }
 
+    pub async fn get_board_for_project(&self, project_key: &str) -> Result<Option<u64>> {
+        let url = format!("{}/rest/agile/1.0/board", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("projectKeyOrId", project_key), ("maxResults", "1")])
+            .send()
+            .await
+            .with_context(|| format!("Failed to get board for project {project_key}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira list boards returned {status}: {body}");
+        }
+
+        let result: BoardList = resp.json().await.context("Failed to parse boards response")?;
+        Ok(result.values.into_iter().next().map(|b| b.id))
+    }
+
+    pub async fn get_active_sprint(&self, board_id: u64) -> Result<Option<Sprint>> {
+        let url = format!("{}/rest/agile/1.0/board/{board_id}/sprint", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("state", "active")])
+            .send()
+            .await
+            .with_context(|| format!("Failed to get active sprint for board {board_id}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get sprints returned {status}: {body}");
+        }
+
+        let result: SprintList = resp.json().await.context("Failed to parse sprints response")?;
+        Ok(result.values.into_iter().next())
+    }
+
+    pub async fn assign_issue_to_sprint(&self, sprint_id: u64, issue_key: &str) -> Result<()> {
+        let url = format!("{}/rest/agile/1.0/sprint/{sprint_id}/issue", self.base_url);
+        let body = serde_json::json!({ "issues": [issue_key] });
+        let resp = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .with_context(|| format!("Failed to assign {issue_key} to sprint {sprint_id}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira assign to sprint returned {status}: {body}");
+        }
+        Ok(())
+    }
+
+    pub async fn move_to_active_sprint(&self, issue_key: &str) -> Result<()> {
+        let project_key = issue_key.split('-').next().unwrap_or("");
+        if project_key.is_empty() {
+            return Ok(());
+        }
+        let Some(board_id) = self.get_board_for_project(project_key).await? else {
+            return Ok(());
+        };
+        let Some(sprint) = self.get_active_sprint(board_id).await? else {
+            return Ok(());
+        };
+        self.assign_issue_to_sprint(sprint.id, issue_key).await
+    }
+
     pub async fn get_project_components(&self, project_key: &str) -> Result<Vec<ProjectComponent>> {
         let url = format!("{}/rest/api/2/project/{project_key}/components", self.base_url);
         let resp = self

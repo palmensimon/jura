@@ -182,6 +182,18 @@ pub struct BoardList {
     pub total: Option<u32>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct Sprint {
+    pub id: u64,
+    pub name: String,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SprintList {
+    pub values: Vec<Sprint>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CreateIssueRequest {
     pub fields: CreateIssueFields,

@@ -374,7 +374,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         }
                         AppView::Settings => {
                             if key.code == KeyCode::Char('d') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                                open_in_nvim(config_dir().join("user_defaults.yaml"));
+                                open_in_nvim(config_dir().join("user_settings.yaml"));
                                 terminal.clear().ok();
                             } else if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
                                 open_in_nvim(config_dir().join("templates.yaml"));

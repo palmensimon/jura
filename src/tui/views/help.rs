@@ -31,9 +31,10 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
             &[
                 ("t", "Change status"),
                 ("a", "Assign / unassign self"),
-                ("Space", "Checkout / create branch"),
-                ("p", "Open PR/MR in browser"),
-                ("o", "Open ticket in browser"),
+                ("c", "Checkout / create branch"),
+                ("Shift+C", "Branch picker"),
+                ("o", "Open PR/MR in browser"),
+                ("b", "Open ticket in browser"),
                 ("⌫", "Back  (Detail only)"),
             ],
         ),
@@ -44,7 +45,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
                 ("/", "Quick search"),
                 ("[  ]  Tab", "Switch tab"),
                 ("f", "Filter panel"),
-                ("c", "Create ticket"),
+                ("n", "New ticket"),
                 ("r", "Refresh"),
                 ("s", "Settings"),
             ],
@@ -192,17 +193,17 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
 pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str)] {
     match view {
         AppView::TicketList => &[
-            ("Space", "checkout"),
+            ("c", "checkout"),
             ("/", "search"),
             ("f", "filter"),
-            ("c", "create"),
+            ("n", "new ticket"),
             ("r", "refresh"),
             ("?", "help"),
         ],
         AppView::TicketDetail { .. } => &[
             ("t", "status"),
             ("a", "assign self"),
-            ("Space", "checkout"),
+            ("c", "checkout"),
             ("o", "open PR"),
             ("b", "open in browser"),
             ("?", "help"),

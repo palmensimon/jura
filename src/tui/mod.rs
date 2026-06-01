@@ -250,7 +250,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         }
                                     });
                                 }
-                            } else if key.code == KeyCode::Char(' ') && key.modifiers.contains(KeyModifiers::SHIFT) && !app.active_tab().local_search_active {
+                            } else if key.code == KeyCode::Char('C') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
                                     let branches = find_branches_for_ticket(&issue.key);
                                     if branches.is_empty() {
@@ -262,7 +262,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         detail_state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
                                     }
                                 }
-                            } else if key.code == KeyCode::Char(' ') && !key.modifiers.contains(KeyModifiers::SHIFT) && !app.active_tab().local_search_active {
+                            } else if key.code == KeyCode::Char('c') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
                                     let branches = find_branches_for_ticket(&issue.key);
                                     match branches.len() {
@@ -298,7 +298,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         app.error = Some("Checkout a branch for this ticket first".to_string());
                                     }
                                 }
-                            } else if key.code == KeyCode::Char('c') && !app.active_tab().local_search_active {
+                            } else if key.code == KeyCode::Char('n') && !app.active_tab().local_search_active {
                                 templates_panel_state = TemplatesPanelState::new();
                                 app.view = AppView::TemplatesPanel;
                             } else if key.code == KeyCode::Char('f') && !app.active_tab().local_search_active {

@@ -1,4 +1,4 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -142,21 +142,10 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
                 }
             }
         }
-        KeyCode::Char(' ') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            if let AppView::TicketDetail { issue } = &app.view {
-                let issue = issue.as_ref().clone();
-                let branches = find_branches_for_ticket(&issue.key);
-                if branches.is_empty() {
-                    let suggested = branch_name(&issue.key, issue.summary());
-                    let mut ta = TextArea::from([suggested.as_str()]);
-                    ta.move_cursor(tui_textarea::CursorMove::End);
-                    state.branch_pick = BranchPickState::Editing { input: ta, issue };
-                } else {
-                    state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
-                }
-            }
+        KeyCode::Char('C') => {
+            open_force_picker(app, state);
         }
-        KeyCode::Char(' ') => {
+        KeyCode::Char('c') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let issue = issue.as_ref().clone();
                 let branches = find_branches_for_ticket(&issue.key);
@@ -408,6 +397,22 @@ pub fn draw_branch_picker(state: &DetailState, frame: &mut Frame, area: Rect) {
         .border_style(Style::default().fg(Color::Yellow));
 
     frame.render_widget(Paragraph::new(items).block(block), popup);
+}
+
+fn open_force_picker(app: &App, state: &mut DetailState) {
+    let issue = match &app.view {
+        AppView::TicketDetail { issue } => issue.as_ref().clone(),
+        _ => return,
+    };
+    let branches = find_branches_for_ticket(&issue.key);
+    if branches.is_empty() {
+        let suggested = branch_name(&issue.key, issue.summary());
+        let mut ta = TextArea::from([suggested.as_str()]);
+        ta.move_cursor(tui_textarea::CursorMove::End);
+        state.branch_pick = BranchPickState::Editing { input: ta, issue };
+    } else {
+        state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
+    }
 }
 
 fn meta_label(s: &str) -> Span<'_> {

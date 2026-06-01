@@ -20,7 +20,6 @@ const FIELD_COUNT: usize = 3;
 
 pub struct SettingsState {
     inputs: [TextArea<'static>; FIELD_COUNT],
-    token_revealed: bool,
     active: usize,
 }
 
@@ -28,10 +27,10 @@ impl SettingsState {
     pub fn new(config: &Config) -> Self {
         let mut inputs = std::array::from_fn(|_| TextArea::default());
         inputs[F_BASE_URL] = single_line_area(&config.jira.base_url);
-        inputs[F_TOKEN] = masked_area(&config.jira.token);
+        inputs[F_TOKEN] = single_line_area(&config.jira.token);
         inputs[F_PROJECT] = single_line_area(config.defaults.project.as_deref().unwrap_or(""));
 
-        let mut state = Self { inputs, token_revealed: false, active: 0 };
+        let mut state = Self { inputs, active: 0 };
         state.refresh_styles();
         state
     }
@@ -39,7 +38,7 @@ impl SettingsState {
     fn refresh_styles(&mut self) {
         for (i, input) in self.inputs.iter_mut().enumerate() {
             let is_active = i == self.active;
-            let (label, masked) = field_meta(i);
+            let label = field_label(i);
             input.set_block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -50,18 +49,6 @@ impl SettingsState {
                         Style::default().fg(Color::DarkGray)
                     }),
             );
-            if masked {
-                input.set_mask_char('●');
-            }
-        }
-    }
-
-    fn reveal_token(&mut self, show: bool) {
-        self.token_revealed = show;
-        if show {
-            self.inputs[F_TOKEN].clear_mask_char();
-        } else {
-            self.inputs[F_TOKEN].set_mask_char('●');
         }
     }
 
@@ -137,10 +124,6 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
         KeyCode::Char('1') => state.move_to(F_BASE_URL),
         KeyCode::Char('2') => state.move_to(F_TOKEN),
         KeyCode::Char('3') => state.move_to(F_PROJECT),
-        KeyCode::Char('r') if state.active == F_TOKEN && key.modifiers.is_empty() => {
-            let next = !state.token_revealed;
-            state.reveal_token(next);
-        }
         _ => {
             state.inputs[state.active].input(key);
         }
@@ -177,27 +160,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
     );
 
     frame.render_widget(&state.inputs[F_BASE_URL], chunks[1]);
-
-    // Token with r·reveal hint
-    let token_area = chunks[2];
-    frame.render_widget(&state.inputs[F_TOKEN], token_area);
-    if state.active == F_TOKEN && token_area.height >= 3 {
-        let hint = if state.token_revealed { "r·hide" } else { "r·reveal" };
-        let hint_rect = Rect {
-            x: token_area.right().saturating_sub(hint.len() as u16 + 3),
-            y: token_area.y,
-            width: hint.len() as u16 + 2,
-            height: 1,
-        };
-        frame.render_widget(
-            Paragraph::new(Span::styled(
-                format!(" {hint} "),
-                Style::default().fg(Color::DarkGray),
-            )),
-            hint_rect,
-        );
-    }
-
+    frame.render_widget(&state.inputs[F_TOKEN], chunks[2]);
     frame.render_widget(&state.inputs[F_PROJECT], chunks[3]);
 
     // Info block
@@ -234,23 +197,17 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-fn field_meta(idx: usize) -> (&'static str, bool) {
+fn field_label(idx: usize) -> &'static str {
     match idx {
-        F_BASE_URL => ("[1] Base URL", false),
-        F_TOKEN => ("[2] Token / PAT", true),
-        F_PROJECT => ("[3] Default Project", false),
-        _ => ("", false),
+        F_BASE_URL => "[1] Base URL",
+        F_TOKEN => "[2] Token / PAT",
+        F_PROJECT => "[3] Default Project",
+        _ => "",
     }
 }
 
 fn single_line_area(value: &str) -> TextArea<'static> {
     let mut ta = TextArea::from([value]);
     ta.move_cursor(tui_textarea::CursorMove::End);
-    ta
-}
-
-fn masked_area(value: &str) -> TextArea<'static> {
-    let mut ta = single_line_area(value);
-    ta.set_mask_char('●');
     ta
 }

@@ -35,8 +35,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
             }
         }
         KeyCode::Char('r') => {
-            app.current_branch_key = crate::git::current_branch().ok()
-                .and_then(|b| crate::git::extract_ticket_key(&b));
+            let branch = crate::git::current_branch().ok();
+            app.current_branch_key = branch.as_deref().and_then(crate::git::extract_ticket_key);
+            app.current_branch_name = branch;
             app.trigger_load_tab(Tab::All);
             app.trigger_load_tab(Tab::Mine);
         }
@@ -141,6 +142,17 @@ pub fn draw_bar(app: &App, frame: &mut Frame, area: Rect) {
                 Style::default().fg(Color::DarkGray),
             ));
         }
+        if let Some(issue) = app.selected_issue() {
+            if app.current_branch_key.as_deref() == Some(issue.key.as_str()) {
+                if let Some(branch) = &app.current_branch_name {
+                    spans.push(Span::raw("  "));
+                    spans.push(Span::styled(
+                        format!("● {branch}"),
+                        Style::default().fg(Color::Green),
+                    ));
+                }
+            }
+        }
         Line::from(spans)
     };
 
@@ -217,7 +229,6 @@ fn draw_table(app: &mut App, frame: &mut Frame, area: Rect) {
         Cell::from("KEY").style(header_style),
         Cell::from("TYPE").style(header_style),
         Cell::from("STATUS").style(header_style),
-        Cell::from("COMPONENT").style(header_style),
         Cell::from("SUMMARY").style(header_style),
         Cell::from("ASSIGNEE").style(header_style),
     ])
@@ -256,13 +267,6 @@ fn build_issue_row<'a>(issue: &'a crate::jira::Issue, current_branch_key: Option
         "To Do" | "Open" => Color::Blue,
         _ => Color::White,
     };
-    let component = issue
-        .component_names()
-        .into_iter()
-        .next()
-        .unwrap_or("")
-        .to_string();
-
     let is_checked_out = current_branch_key == Some(issue.key.as_str());
     let key_style = if is_checked_out {
         Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
@@ -279,17 +283,15 @@ fn build_issue_row<'a>(issue: &'a crate::jira::Issue, current_branch_key: Option
         Cell::from(key_text).style(key_style),
         Cell::from(issue.issue_type().to_string()).style(Style::default().fg(type_color)),
         Cell::from(issue.status().to_string()).style(Style::default().fg(status_color)),
-        Cell::from(component),
         Cell::from(issue.summary().to_string()),
         Cell::from(issue.assignee().to_string()).style(Style::default().fg(Color::DarkGray)),
     ])
 }
 
-fn issue_column_widths() -> [Constraint; 6] {
+fn issue_column_widths() -> [Constraint; 5] {
     [
         Constraint::Length(14),
         Constraint::Length(10),
-        Constraint::Length(14),
         Constraint::Length(14),
         Constraint::Min(30),
         Constraint::Length(18),

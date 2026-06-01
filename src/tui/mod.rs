@@ -24,14 +24,14 @@ use views::{
     help,
     settings::{self, SettingsState},
     templates_panel::{self, TemplatesPanelResult, TemplatesPanelState},
-    ticket_detail::{self, DetailState},
+    ticket_detail::{self, BranchPickState, DetailState},
     ticket_list,
     transition_picker::{self, TransitionState},
 };
 
 use crate::{
     config::{Config, DefaultFilter, Templates, config_dir, save_settings},
-    git::{branch_name, find_branch_for_ticket, new_pr_url, open_url},
+    git::{branch_name, find_branches_for_ticket, new_pr_url, open_url},
     jira::JiraClient,
 };
 
@@ -75,8 +75,10 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
             match &app.view {
                 AppView::TicketList => {
                     ticket_list::draw(&mut app, frame, content_area);
-                    if detail_state.branch_editing {
-                        ticket_detail::draw_branch_editor(&mut detail_state, frame, content_area);
+                    match &detail_state.branch_pick {
+                        BranchPickState::Editing { .. } => ticket_detail::draw_branch_editor(&mut detail_state, frame, content_area),
+                        BranchPickState::Picking { .. } => ticket_detail::draw_branch_picker(&detail_state, frame, content_area),
+                        BranchPickState::Idle => {}
                     }
                 }
                 AppView::TicketDetail { .. } => ticket_detail::draw(&app, &mut detail_state, frame, content_area),
@@ -105,7 +107,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
             }
 
             // Global bottom status bar
-            if matches!(app.view, AppView::TicketList) && detail_state.branch_editing {
+            if matches!(app.view, AppView::TicketList) && detail_state.is_picking() {
                 ticket_detail::draw_bar(&app, &detail_state, frame, bar_area);
             } else if matches!(app.view, AppView::TicketList) {
                 ticket_list::draw_bar(&app, frame, bar_area);
@@ -221,8 +223,10 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
 
                     match app.view.clone() {
                         AppView::TicketList => {
-                            if detail_state.branch_editing {
+                            if matches!(detail_state.branch_pick, BranchPickState::Editing { .. }) {
                                 ticket_detail::handle_branch_editor_key(&mut app, &mut detail_state, key);
+                            } else if matches!(detail_state.branch_pick, BranchPickState::Picking { .. }) {
+                                ticket_detail::handle_branch_picker_key(&mut app, &mut detail_state, key);
                             } else if key.code == KeyCode::Char('s') && !app.active_tab().local_search_active {
                                 settings_state = SettingsState::new(&app.config);
                                 app.view = AppView::Settings;
@@ -248,16 +252,20 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 }
                             } else if key.code == KeyCode::Char(' ') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
-                                    if let Some(branch) = find_branch_for_ticket(&issue.key) {
-                                        app.spawn_checkout(branch, &issue);
-                                    } else {
-                                        let suggested = branch_name(&issue.key, issue.summary());
-                                        let mut ta = tui_textarea::TextArea::from([suggested.as_str()]);
-                                        ta.move_cursor(tui_textarea::CursorMove::End);
-                                        detail_state.branch_input = ta;
-                                        detail_state.checkout_issue = Some(issue);
-                                        detail_state.branch_editing = true;
-                                        // stay on TicketList — popup renders over it
+                                    let branches = find_branches_for_ticket(&issue.key);
+                                    match branches.len() {
+                                        0 => {
+                                            let suggested = branch_name(&issue.key, issue.summary());
+                                            let mut ta = tui_textarea::TextArea::from([suggested.as_str()]);
+                                            ta.move_cursor(tui_textarea::CursorMove::End);
+                                            detail_state.branch_pick = BranchPickState::Editing { input: ta, issue };
+                                        }
+                                        1 => {
+                                            app.spawn_checkout(branches.into_iter().next().unwrap(), &issue);
+                                        }
+                                        _ => {
+                                            detail_state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
+                                        }
                                     }
                                 }
                             } else if key.code == KeyCode::Char('a') && !app.active_tab().local_search_active {
@@ -271,13 +279,15 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 }
                             } else if key.code == KeyCode::Char('o') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue() {
-                                    let key_str = issue.key.clone();
-                                    match find_branch_for_ticket(&key_str) {
-                                        None => app.error = Some(format!("No local branch found for {key_str}")),
-                                        Some(branch) => match new_pr_url(&branch) {
-                                            None => app.error = Some("Could not build PR URL — unknown remote or no origin".to_string()),
-                                            Some(url) => { let _ = open_url(&url); }
-                                        },
+                                    if app.current_branch_key.as_deref() == Some(issue.key.as_str()) {
+                                        if let Some(branch) = &app.current_branch_name {
+                                            match new_pr_url(branch) {
+                                                None => app.error = Some("Could not build PR URL — unknown remote or no origin".to_string()),
+                                                Some(url) => { let _ = open_url(&url); }
+                                            }
+                                        }
+                                    } else {
+                                        app.error = Some("Checkout a branch for this ticket first".to_string());
                                     }
                                 }
                             } else if key.code == KeyCode::Char('c') && !app.active_tab().local_search_active {
@@ -315,7 +325,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             }
                         }
                         AppView::TicketDetail { .. } => {
-                            if key.code == KeyCode::Char('t') && !detail_state.branch_editing {
+                            if key.code == KeyCode::Char('t') && matches!(detail_state.branch_pick, BranchPickState::Idle) {
                                 if let AppView::TicketDetail { issue } = &app.view {
                                     let issue = issue.clone();
                                     let key_str = issue.key.clone();

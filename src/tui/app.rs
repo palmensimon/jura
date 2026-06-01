@@ -286,6 +286,7 @@ pub struct App {
     pub status_msg: Option<String>,
     pub filter: FilterState,
     pub current_branch_key: Option<String>,
+    pub current_branch_name: Option<String>,
     pub current_user_name: Option<String>,
     pub config: Arc<Config>,
     pub templates: Vec<TicketTemplate>,
@@ -308,8 +309,9 @@ impl App {
         event_tx: mpsc::Sender<AppEvent>,
     ) -> Self {
         let filter = FilterState::from_config(&config);
-        let current_branch_key = crate::git::current_branch().ok()
-            .and_then(|b| crate::git::extract_ticket_key(&b));
+        let current_branch_name = crate::git::current_branch().ok();
+        let current_branch_key = current_branch_name.as_deref()
+            .and_then(crate::git::extract_ticket_key);
 
         Self {
             view: AppView::TicketList,
@@ -320,6 +322,7 @@ impl App {
             status_msg: None,
             filter,
             current_branch_key,
+            current_branch_name,
             current_user_name: None,
             config: Arc::new(config),
             templates,
@@ -373,6 +376,7 @@ impl App {
             }
             AppEvent::BranchCreated(branch) => {
                 self.current_branch_key = crate::git::extract_ticket_key(&branch);
+                self.current_branch_name = Some(branch.clone());
                 self.status_msg = Some(format!("Switched to '{branch}'"));
             }
             AppEvent::TicketCreated(key) => {
@@ -473,8 +477,9 @@ impl App {
     }
 
     pub fn trigger_load(&mut self) {
-        self.current_branch_key = crate::git::current_branch().ok()
-            .and_then(|b| crate::git::extract_ticket_key(&b));
+        let branch = crate::git::current_branch().ok();
+        self.current_branch_key = branch.as_deref().and_then(crate::git::extract_ticket_key);
+        self.current_branch_name = branch;
         self.trigger_load_tab(self.tab);
     }
 

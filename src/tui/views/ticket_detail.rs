@@ -9,26 +9,30 @@ use ratatui::{
 use tui_textarea::TextArea;
 
 use crate::{
-    git::{branch_name, find_branch_for_ticket, new_pr_url, open_url},
+    git::{branch_name, find_branches_for_ticket, new_pr_url, open_url},
     jira::Issue,
     tui::app::{App, AppView},
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
+pub enum BranchPickState {
+    Idle,
+    Editing { input: TextArea<'static>, issue: Issue },
+    Picking { branches: Vec<String>, selected: usize, issue: Issue },
+}
+
 pub struct DetailState {
-    pub branch_editing: bool,
-    pub branch_input: TextArea<'static>,
-    pub checkout_issue: Option<Issue>,
+    pub branch_pick: BranchPickState,
 }
 
 impl DetailState {
     pub fn new() -> Self {
-        Self {
-            branch_editing: false,
-            branch_input: TextArea::default(),
-            checkout_issue: None,
-        }
+        Self { branch_pick: BranchPickState::Idle }
+    }
+
+    pub fn is_picking(&self) -> bool {
+        !matches!(self.branch_pick, BranchPickState::Idle)
     }
 }
 
@@ -39,34 +43,63 @@ impl DetailState {
 pub fn handle_branch_editor_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => {
-            state.branch_editing = false;
-            state.checkout_issue = None;
+            state.branch_pick = BranchPickState::Idle;
         }
         KeyCode::Enter if key.modifiers.is_empty() => {
-            let branch = state
-                .branch_input
-                .lines()
-                .first()
-                .cloned()
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            if !branch.is_empty() {
-                if let Some(issue) = state.checkout_issue.take() {
+            if let BranchPickState::Editing { input, issue } = &state.branch_pick {
+                let branch = input.lines().first().cloned().unwrap_or_default().trim().to_string();
+                if !branch.is_empty() {
+                    let issue = issue.clone();
+                    state.branch_pick = BranchPickState::Idle;
                     app.spawn_checkout(branch, &issue);
+                } else {
+                    state.branch_pick = BranchPickState::Idle;
                 }
             }
-            state.branch_editing = false;
         }
         _ => {
-            state.branch_input.input(key);
+            if let BranchPickState::Editing { input, .. } = &mut state.branch_pick {
+                input.input(key);
+            }
         }
     }
 }
 
+/// Handle keys when the branch picker popup is active.
+pub fn handle_branch_picker_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => {
+            state.branch_pick = BranchPickState::Idle;
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if let BranchPickState::Picking { selected, .. } = &mut state.branch_pick {
+                if *selected > 0 { *selected -= 1; }
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if let BranchPickState::Picking { selected, branches, .. } = &mut state.branch_pick {
+                if *selected + 1 < branches.len() { *selected += 1; }
+            }
+        }
+        KeyCode::Enter => {
+            if let BranchPickState::Picking { branches, selected, issue } = &state.branch_pick {
+                let branch = branches[*selected].clone();
+                let issue = issue.clone();
+                state.branch_pick = BranchPickState::Idle;
+                app.spawn_checkout(branch, &issue);
+            }
+        }
+        _ => {}
+    }
+}
+
 pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
-    if state.branch_editing {
+    if matches!(state.branch_pick, BranchPickState::Editing { .. }) {
         handle_branch_editor_key(app, state, key);
+        return;
+    }
+    if matches!(state.branch_pick, BranchPickState::Picking { .. }) {
+        handle_branch_picker_key(app, state, key);
         return;
     }
 
@@ -88,27 +121,35 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
         }
         KeyCode::Char('o') => {
             if let AppView::TicketDetail { issue } = &app.view {
-                match find_branch_for_ticket(&issue.key) {
-                    None => app.error = Some(format!("No local branch found for {}", issue.key)),
-                    Some(branch) => match new_pr_url(&branch) {
-                        None => app.error = Some("Could not build PR URL — unknown remote or no origin".to_string()),
-                        Some(url) => { let _ = open_url(&url); }
-                    },
+                if app.current_branch_key.as_deref() == Some(issue.key.as_str()) {
+                    if let Some(branch) = &app.current_branch_name {
+                        match new_pr_url(branch) {
+                            None => app.error = Some("Could not build PR URL — unknown remote or no origin".to_string()),
+                            Some(url) => { let _ = open_url(&url); }
+                        }
+                    }
+                } else {
+                    app.error = Some("Checkout a branch for this ticket first".to_string());
                 }
             }
         }
         KeyCode::Char(' ') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let issue = issue.as_ref().clone();
-                if let Some(branch) = find_branch_for_ticket(&issue.key) {
-                    app.spawn_checkout(branch, &issue);
-                } else {
-                    let suggested = branch_name(&issue.key, issue.summary());
-                    let mut ta = TextArea::from([suggested.as_str()]);
-                    ta.move_cursor(tui_textarea::CursorMove::End);
-                    state.branch_input = ta;
-                    state.checkout_issue = Some(issue);
-                    state.branch_editing = true;
+                let branches = find_branches_for_ticket(&issue.key);
+                match branches.len() {
+                    0 => {
+                        let suggested = branch_name(&issue.key, issue.summary());
+                        let mut ta = TextArea::from([suggested.as_str()]);
+                        ta.move_cursor(tui_textarea::CursorMove::End);
+                        state.branch_pick = BranchPickState::Editing { input: ta, issue };
+                    }
+                    1 => {
+                        app.spawn_checkout(branches.into_iter().next().unwrap(), &issue);
+                    }
+                    _ => {
+                        state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
+                    }
                 }
             }
         }
@@ -138,22 +179,37 @@ pub fn draw(app: &App, state: &mut DetailState, frame: &mut Frame, area: Rect) {
     draw_metadata(issue, frame, chunks[1]);
     draw_description(issue, frame, chunks[2]);
 
-    if state.branch_editing {
-        draw_branch_editor(state, frame, area);
+    match &state.branch_pick {
+        BranchPickState::Editing { .. } => draw_branch_editor(state, frame, area),
+        BranchPickState::Picking { .. } => draw_branch_picker(state, frame, area),
+        BranchPickState::Idle => {}
     }
 }
 
 /// Renders the single bottom status bar row for the ticket detail view.
 pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
-    if state.branch_editing {
-        frame.render_widget(
-            Paragraph::new(Span::styled(
-                " Enter to create branch  Esc to cancel",
-                Style::default().fg(Color::DarkGray),
-            )),
-            area,
-        );
-        return;
+    match &state.branch_pick {
+        BranchPickState::Editing { .. } => {
+            frame.render_widget(
+                Paragraph::new(Span::styled(
+                    " Enter to create branch  Esc to cancel",
+                    Style::default().fg(Color::DarkGray),
+                )),
+                area,
+            );
+            return;
+        }
+        BranchPickState::Picking { .. } => {
+            frame.render_widget(
+                Paragraph::new(Span::styled(
+                    " ↑↓ to select  Enter to checkout  Esc to cancel",
+                    Style::default().fg(Color::DarkGray),
+                )),
+                area,
+            );
+            return;
+        }
+        BranchPickState::Idle => {}
     }
 
     if let Some(err) = &app.error {
@@ -273,6 +329,8 @@ fn draw_description(issue: &Issue, frame: &mut Frame, area: Rect) {
 }
 
 pub fn draw_branch_editor(state: &mut DetailState, frame: &mut Frame, area: Rect) {
+    let BranchPickState::Editing { input, .. } = &mut state.branch_pick else { return; };
+
     let popup_w = area.width.saturating_sub(8).min(90);
     let popup_h = 3;
     let x = area.x + area.width.saturating_sub(popup_w) / 2;
@@ -280,14 +338,45 @@ pub fn draw_branch_editor(state: &mut DetailState, frame: &mut Frame, area: Rect
     let popup = Rect::new(x, y, popup_w, popup_h);
 
     frame.render_widget(Clear, popup);
-    state.branch_input.set_block(
+    input.set_block(
         Block::default()
             .borders(Borders::ALL)
             .title(" Branch name — Enter to create, Esc to cancel ")
             .border_style(Style::default().fg(Color::Yellow)),
     );
-    state.branch_input.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
-    frame.render_widget(&state.branch_input, popup);
+    input.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
+    frame.render_widget(&*input, popup);
+}
+
+pub fn draw_branch_picker(state: &DetailState, frame: &mut Frame, area: Rect) {
+    let BranchPickState::Picking { branches, selected, .. } = &state.branch_pick else { return; };
+
+    let inner_h = branches.len() as u16;
+    let popup_h = (inner_h + 2).min(area.height.saturating_sub(4));
+    let popup_w = area.width.saturating_sub(8).min(90);
+    let x = area.x + area.width.saturating_sub(popup_w) / 2;
+    let y = area.y + area.height.saturating_sub(popup_h) / 2;
+    let popup = Rect::new(x, y, popup_w, popup_h);
+
+    frame.render_widget(Clear, popup);
+
+    let items: Vec<Line> = branches.iter().enumerate().map(|(i, b)| {
+        if i == *selected {
+            Line::from(Span::styled(
+                format!(" ▶ {b}"),
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            ))
+        } else {
+            Line::from(Span::raw(format!("   {b}")))
+        }
+    }).collect();
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Select branch — ↑↓ navigate, Enter checkout, Esc cancel ")
+        .border_style(Style::default().fg(Color::Yellow));
+
+    frame.render_widget(Paragraph::new(items).block(block), popup);
 }
 
 fn meta_label(s: &str) -> Span<'_> {

@@ -54,19 +54,17 @@ pub fn current_branch() -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-/// Returns the first local branch whose name contains `ticket_key` (case-insensitive).
-pub fn find_branch_for_ticket(ticket_key: &str) -> Option<String> {
-    let output = Command::new("git")
-        .args(["branch", "--list"])
-        .output()
-        .ok()?;
-
+/// Returns all local branches whose names contain `ticket_key` (case-insensitive).
+pub fn find_branches_for_ticket(ticket_key: &str) -> Vec<String> {
+    let Ok(output) = Command::new("git").args(["branch", "--list"]).output() else {
+        return vec![];
+    };
     let stdout = String::from_utf8_lossy(&output.stdout);
     let key = ticket_key.to_lowercase();
-
     stdout.lines()
         .map(|l| l.trim().trim_start_matches("* ").to_string())
-        .find(|b| b.to_lowercase().contains(&key))
+        .filter(|b| b.to_lowercase().contains(&key))
+        .collect()
 }
 
 /// Builds a browser URL for opening a new PR/MR for `branch`, derived from

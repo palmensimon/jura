@@ -357,11 +357,11 @@ impl App {
             AppEvent::IssuesLoaded(Ok(issues), jql, tab) => {
                 let ts = match tab {
                     Tab::All => {
-                        crate::mcp::storage::save_issue_cache(&jql, &issues);
+                        crate::cache::storage::save_issue_cache(&jql, &issues);
                         &mut self.all
                     }
                     Tab::Mine => {
-                        crate::mcp::storage::save_mine_cache(&jql, &issues);
+                        crate::cache::storage::save_mine_cache(&jql, &issues);
                         &mut self.mine
                     }
                 };
@@ -424,7 +424,7 @@ impl App {
                 };
             }
             AppEvent::TransitionsLoaded(transitions, issue_key) => {
-                crate::mcp::storage::save_transition_cache(&issue_key, &transitions);
+                crate::cache::storage::save_transition_cache(&issue_key, &transitions);
                 self.available_transitions = transitions;
             }
             AppEvent::TransitionApplied(_key) => {
@@ -502,8 +502,8 @@ impl App {
 
         // Pre-populate from cache
         let cached = match tab {
-            Tab::All => crate::mcp::storage::load_issue_cache(),
-            Tab::Mine => crate::mcp::storage::load_mine_cache(),
+            Tab::All => crate::cache::storage::load_issue_cache(),
+            Tab::Mine => crate::cache::storage::load_mine_cache(),
         };
         if let Some(cache) = cached {
             if cache.jql == jql && !cache.issues.is_empty() {

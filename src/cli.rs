@@ -1,6 +1,10 @@
+use std::path::PathBuf;
 use serde::Serialize;
+use crate::git;
 use crate::jira::models::Issue;
-use crate::mcp::storage::{load_mine_cache, load_issue_cache};
+use crate::cache::storage::{load_mine_cache, load_issue_cache};
+
+static SKILL_BYTES: &[u8] = include_bytes!("../jura-cli.skill");
 
 #[derive(Serialize)]
 struct TicketSummary<'a> {
@@ -11,6 +15,7 @@ struct TicketSummary<'a> {
     issue_type: &'a str,
     priority: &'a str,
     assignee: &'a str,
+    checked_out: bool,
 }
 
 #[derive(Serialize)]
@@ -52,6 +57,9 @@ pub fn cmd_tickets() {
             error_exit("No tickets cached. Open jura TUI to load your assigned tickets.")
         });
 
+    let current_key = git::current_branch().ok()
+        .and_then(|b| git::extract_ticket_key(&b));
+
     let summaries: Vec<TicketSummary> = cache.issues.iter().map(|i| TicketSummary {
         key: &i.key,
         summary: i.summary(),
@@ -59,9 +67,24 @@ pub fn cmd_tickets() {
         issue_type: i.issue_type(),
         priority: i.priority(),
         assignee: i.assignee(),
+        checked_out: current_key.as_deref() == Some(i.key.as_str()),
     }).collect();
 
     print_json(&summaries);
+}
+
+pub fn cmd_current() {
+    let branch = git::current_branch().unwrap_or_else(|e| {
+        error_exit(&format!("Could not determine current branch: {e}"))
+    });
+
+    let key = git::extract_ticket_key(&branch).unwrap_or_else(|| {
+        error_exit(&format!(
+            "No Jira ticket key found in branch name '{branch}'."
+        ))
+    });
+
+    cmd_ticket(&key);
 }
 
 pub fn cmd_ticket(key: &str) {
@@ -95,6 +118,22 @@ pub fn cmd_ticket(key: &str) {
     };
 
     print_json(&detail);
+}
+
+pub fn cmd_install_skill(path: Option<&str>) {
+    let dest: PathBuf = match path {
+        Some(p) => PathBuf::from(p),
+        None => std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("jura-cli.skill"),
+    };
+
+    if let Err(e) = std::fs::write(&dest, SKILL_BYTES) {
+        eprintln!("Failed to write skill file: {e}");
+        std::process::exit(1);
+    }
+
+    println!("Skill written to {}", dest.display());
 }
 
 fn find_in_cache(key: &str) -> Option<Issue> {

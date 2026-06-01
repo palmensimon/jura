@@ -37,10 +37,14 @@ Two files are generated:
 | `jura` | Open the TUI |
 | `jura tickets` | List assigned tickets (JSON, reads local cache) |
 | `jura ticket <KEY>` | Full details for a ticket |
+| `jura current` | Full details for the ticket linked to the current git branch |
 | `jura init` | Write example config files |
+| `jura install-skill [--path <file>]` | Write the AI skill file |
 
 The local cache is populated when you open the Mine tab in the TUI.
 
 ## AI Integration
 
-Install `jira-mcp.skill` to give your AI agent access to your Jira tickets via the CLI commands above.
+Run `jura install-skill` to write `jura-cli.skill` to the current directory (or `--path <file>` to choose a location), then install it in your AI agent.
+
+This gives your agent read-only access to your cached Jira tickets via the CLI commands above.

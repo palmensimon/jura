@@ -2,14 +2,14 @@ mod cli;
 mod config;
 mod git;
 mod jira;
-mod mcp;
+mod cache;
 mod tui;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "jura", about = "Jira terminal client with git and Claude integration")]
+#[command(name = "jura", about = "Jira terminal client with git and AI integration")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -25,6 +25,14 @@ enum Command {
     Ticket {
         key: String,
     },
+    /// Show full details for the ticket linked to the current git branch
+    Current,
+    /// Write the jura-cli.skill file for use with your AI agent
+    InstallSkill {
+        /// Output path (defaults to ./jura-cli.skill)
+        #[arg(long)]
+        path: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -34,14 +42,31 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Command::Init) => {
             config::write_example_config()?;
-            let config_path = config::config_dir().join("config.yaml");
-            println!("Edit {} with your Jira credentials, then run jura.", config_path.display());
+            let dir = config::config_dir();
+            let home = dirs::home_dir().unwrap_or_default();
+            let display = dir.strip_prefix(&home)
+                .map(|p| format!("~/{}", p.display()))
+                .unwrap_or_else(|_| dir.display().to_string());
+            println!("Config directory: {display}\n");
+            println!("  config.yaml          your Jira credentials (edit this first)");
+            println!("  user_defaults.yaml   preferences and filters");
+            println!("  templates.yaml       create-ticket templates\n");
+            println!("Next steps:");
+            println!("  1. Edit {display}/config.yaml with your base_url and token");
+            println!("  2. Run `jura` to open the TUI");
+            println!("  3. Run `jura install-skill` to set up the AI skill");
         }
         Some(Command::Tickets) => {
             cli::cmd_tickets();
         }
         Some(Command::Ticket { key }) => {
             cli::cmd_ticket(&key);
+        }
+        Some(Command::Current) => {
+            cli::cmd_current();
+        }
+        Some(Command::InstallSkill { path }) => {
+            cli::cmd_install_skill(path.as_deref());
         }
         None => {
             let cfg = match config::load_config() {

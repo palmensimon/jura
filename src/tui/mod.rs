@@ -233,7 +233,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             } else if key.code == KeyCode::Char('t') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
                                     let key_str = issue.key.clone();
-                                    if let Some(cached) = crate::mcp::storage::load_transition_cache(&key_str) {
+                                    if let Some(cached) = crate::cache::storage::load_transition_cache(&key_str) {
                                         app.available_transitions = cached;
                                     } else {
                                         app.available_transitions.clear();
@@ -338,7 +338,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                     let issue = issue.clone();
                                     let key_str = issue.key.clone();
                                     // Pre-populate from cache so the list is instant
-                                    if let Some(cached) = crate::mcp::storage::load_transition_cache(&key_str) {
+                                    if let Some(cached) = crate::cache::storage::load_transition_cache(&key_str) {
                                         app.available_transitions = cached;
                                     } else {
                                         app.available_transitions.clear();

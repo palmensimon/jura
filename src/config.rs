@@ -183,7 +183,6 @@ pub fn write_example_config() -> Result<()> {
   token: "your-personal-access-token"
 "#,
         )?;
-        eprintln!("Created example config at {}", config_path.display());
     }
 
     let user_defaults_path = dir.join("user_defaults.yaml");
@@ -265,7 +264,6 @@ pub fn write_example_config() -> Result<()> {
 #     sort_dir: "desc"
 "#,
         )?;
-        eprintln!("Created example user_defaults at {}", user_defaults_path.display());
     }
 
     let templates_path = dir.join("templates.yaml");
@@ -289,7 +287,6 @@ pub fn write_example_config() -> Result<()> {
     priority: "High"
 "#,
         )?;
-        eprintln!("Created example templates at {}", templates_path.display());
     }
 
     Ok(())

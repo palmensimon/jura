@@ -34,7 +34,8 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Command::Init) => {
             config::write_example_config()?;
-            println!("Edit ~/.config/jura/config.yaml with your Jira credentials, then run jura.");
+            let config_path = config::config_dir().join("config.yaml");
+            println!("Edit {} with your Jira credentials, then run jura.", config_path.display());
         }
         Some(Command::Tickets) => {
             cli::cmd_tickets();

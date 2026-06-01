@@ -18,13 +18,8 @@ pub struct JiraConfig {
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Defaults {
     pub project: Option<String>,
-    #[allow(dead_code)]
-    pub board_id: Option<u64>,
     #[serde(default)]
     pub max_results: Option<u32>,
-    /// Legacy single-status filter; superseded by default_filter.statuses
-    #[serde(default)]
-    pub status_filter: Option<String>,
     #[serde(default)]
     pub assign_on_checkout: bool,
     /// Statuses excluded from results when no explicit status filter is active (empty = hide nothing)
@@ -202,12 +197,12 @@ pub fn write_example_config() -> Result<()> {
   # Maximum number of tickets to fetch
   max_results: 50
 
+  # Automatically assign yourself when checking out a branch
+  assign_on_checkout: false
+
   # Statuses hidden from results when no explicit status filter is active (empty = hide nothing)
   # These also appear as toggleable options in the filter panel [3] Hidden statuses row.
   hidden_statuses: []
-
-  # Automatically assign yourself when checking out a branch
-  assign_on_checkout: false
 
   # Restrict which statuses appear in the [2] Status filter row (empty = show all)
   visible_statuses: []

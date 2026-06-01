@@ -235,11 +235,7 @@ impl FilterState {
 
     pub fn from_config(config: &Config) -> Self {
         let df = &config.defaults.default_filter;
-        let selected_statuses = if !df.statuses.is_empty() {
-            df.statuses.clone()
-        } else {
-            config.defaults.status_filter.iter().cloned().collect()
-        };
+        let selected_statuses = df.statuses.clone();
 
         let hidden_statuses = if !df.hidden_statuses.is_empty() {
             df.hidden_statuses.clone()

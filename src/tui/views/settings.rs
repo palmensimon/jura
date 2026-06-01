@@ -137,7 +137,7 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
         KeyCode::Char('1') => state.move_to(F_BASE_URL),
         KeyCode::Char('2') => state.move_to(F_TOKEN),
         KeyCode::Char('3') => state.move_to(F_PROJECT),
-        KeyCode::Char(' ') if state.active == F_TOKEN => {
+        KeyCode::Char('r') if state.active == F_TOKEN && key.modifiers.is_empty() => {
             let next = !state.token_revealed;
             state.reveal_token(next);
         }
@@ -178,11 +178,11 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
 
     frame.render_widget(&state.inputs[F_BASE_URL], chunks[1]);
 
-    // Token with Space·reveal hint
+    // Token with r·reveal hint
     let token_area = chunks[2];
     frame.render_widget(&state.inputs[F_TOKEN], token_area);
     if state.active == F_TOKEN && token_area.height >= 3 {
-        let hint = if state.token_revealed { "Space·hide" } else { "Space·reveal" };
+        let hint = if state.token_revealed { "r·hide" } else { "r·reveal" };
         let hint_rect = Rect {
             x: token_area.right().saturating_sub(hint.len() as u16 + 3),
             y: token_area.y,

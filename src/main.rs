@@ -29,7 +29,7 @@ enum Command {
     Current,
     /// Write the jura-cli.skill file for use with your AI agent
     InstallSkill {
-        /// Output path (defaults to ./jura-cli.skill)
+        /// Parent directory to create jura-cli/ in (defaults to current directory)
         #[arg(long)]
         path: Option<String>,
     },

@@ -45,6 +45,6 @@ The local cache is populated when you open the Mine tab in the TUI.
 
 ## AI Integration
 
-Run `jura install-skill` to write `jura-cli.skill` to the current directory (or `--path <file>` to choose a location), then install it in your AI agent.
+Run `jura install-skill` to create a `jura-cli/` directory containing `SKILL.md` (or `--path <dir>` to place it elsewhere), then install it in your AI agent.
 
 This gives your agent read-only access to your cached Jira tickets via the CLI commands above.

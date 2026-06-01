@@ -4,7 +4,7 @@ use crate::git;
 use crate::jira::models::Issue;
 use crate::cache::storage::{load_mine_cache, load_issue_cache};
 
-static SKILL_BYTES: &[u8] = include_bytes!("../jura-cli.skill");
+static SKILL_MD: &str = include_str!("../SKILL.md");
 
 #[derive(Serialize)]
 struct TicketSummary<'a> {
@@ -121,14 +121,19 @@ pub fn cmd_ticket(key: &str) {
 }
 
 pub fn cmd_install_skill(path: Option<&str>) {
-    let dest: PathBuf = match path {
+    let parent: PathBuf = match path {
         Some(p) => PathBuf::from(p),
-        None => std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join("jura-cli.skill"),
+        None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
     };
+    let dir = parent.join("jura-cli");
+    let dest = dir.join("SKILL.md");
 
-    if let Err(e) = std::fs::write(&dest, SKILL_BYTES) {
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("Failed to create directory {}: {e}", dir.display());
+        std::process::exit(1);
+    }
+
+    if let Err(e) = std::fs::write(&dest, SKILL_MD) {
         eprintln!("Failed to write skill file: {e}");
         std::process::exit(1);
     }

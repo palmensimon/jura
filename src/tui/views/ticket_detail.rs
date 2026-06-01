@@ -1,4 +1,4 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -139,6 +139,20 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
                     }
                 } else {
                     app.error = Some("Checkout a branch for this ticket first".to_string());
+                }
+            }
+        }
+        KeyCode::Char(' ') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            if let AppView::TicketDetail { issue } = &app.view {
+                let issue = issue.as_ref().clone();
+                let branches = find_branches_for_ticket(&issue.key);
+                if branches.is_empty() {
+                    let suggested = branch_name(&issue.key, issue.summary());
+                    let mut ta = TextArea::from([suggested.as_str()]);
+                    ta.move_cursor(tui_textarea::CursorMove::End);
+                    state.branch_pick = BranchPickState::Editing { input: ta, issue };
+                } else {
+                    state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
                 }
             }
         }

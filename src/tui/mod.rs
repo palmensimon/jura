@@ -250,7 +250,19 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         }
                                     });
                                 }
-                            } else if key.code == KeyCode::Char(' ') && !app.active_tab().local_search_active {
+                            } else if key.code == KeyCode::Char(' ') && key.modifiers.contains(KeyModifiers::SHIFT) && !app.active_tab().local_search_active {
+                                if let Some(issue) = app.selected_issue().cloned() {
+                                    let branches = find_branches_for_ticket(&issue.key);
+                                    if branches.is_empty() {
+                                        let suggested = branch_name(&issue.key, issue.summary());
+                                        let mut ta = tui_textarea::TextArea::from([suggested.as_str()]);
+                                        ta.move_cursor(tui_textarea::CursorMove::End);
+                                        detail_state.branch_pick = BranchPickState::Editing { input: ta, issue };
+                                    } else {
+                                        detail_state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
+                                    }
+                                }
+                            } else if key.code == KeyCode::Char(' ') && !key.modifiers.contains(KeyModifiers::SHIFT) && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
                                     let branches = find_branches_for_ticket(&issue.key);
                                     match branches.len() {

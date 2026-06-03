@@ -578,6 +578,19 @@ impl App {
         });
     }
 
+    pub fn reload_issue(&mut self, key: String) {
+        self.status_msg = Some("Refreshing…".to_string());
+        self.error = None;
+        let client = self.client.clone();
+        let tx = self.event_tx.clone();
+        tokio::spawn(async move {
+            match client.get_issue(&key).await {
+                Ok(issue) => { let _ = tx.send(AppEvent::IssueReloaded(issue)).await; }
+                Err(e) => { let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await; }
+            }
+        });
+    }
+
     pub fn toggle_assignment(&mut self, issue: &Issue) {
         let Some(me) = self.current_user_name.clone() else {
             self.error = Some("Current user not loaded yet".to_string());

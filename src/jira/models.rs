@@ -57,6 +57,10 @@ impl Issue {
         self.fields.description.as_deref()
     }
 
+    pub fn fix_version_names(&self) -> Vec<&str> {
+        self.fields.fix_versions.iter().map(|v| v.name.as_str()).collect()
+    }
+
     pub fn sprint_name(&self) -> Option<String> {
         let val = self.fields.customfield_10020.as_ref()?;
         if let Some(arr) = val.as_array() {
@@ -104,6 +108,8 @@ pub struct IssueFields {
     pub parent: Option<Parent>,
     #[serde(rename = "customfield_10020", default)]
     pub customfield_10020: Option<serde_json::Value>,
+    #[serde(rename = "fixVersions", default)]
+    pub fix_versions: Vec<FixVersion>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -121,6 +127,12 @@ pub struct IssueType {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Priority {
     pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FixVersion {
+    pub name: String,
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -184,6 +196,8 @@ pub struct CreateIssueFields {
     pub assignee: Option<NameRef>,
     #[serde(rename = "customfield_10001", skip_serializing_if = "Option::is_none")]
     pub team: Option<String>,
+    #[serde(rename = "fixVersions", skip_serializing_if = "Vec::is_empty")]
+    pub fix_versions: Vec<NameRef>,
 }
 
 #[derive(Debug, Clone, Serialize)]

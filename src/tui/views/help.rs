@@ -206,6 +206,7 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
             ("c", "checkout"),
             ("o", "open PR"),
             ("b", "open in browser"),
+            ("r", "refresh"),
             ("?", "help"),
         ],
         AppView::TransitionPicker { .. } => &[

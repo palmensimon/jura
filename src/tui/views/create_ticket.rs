@@ -127,6 +127,11 @@ fn submit_ticket(app: &mut App, state: &mut CreateState) {
 
     let assignee = template.assignee.as_ref().map(|a| NameRef { name: a.clone() });
     let team = template.team.clone();
+    let fix_versions: Vec<NameRef> = template
+        .fix_version
+        .as_ref()
+        .map(|v| vec![NameRef { name: v.clone() }])
+        .unwrap_or_default();
 
     let req = CreateIssueRequest {
         fields: CreateIssueFields {
@@ -140,6 +145,7 @@ fn submit_ticket(app: &mut App, state: &mut CreateState) {
             epic_link: template.epic_link.clone(),
             assignee,
             team,
+            fix_versions,
         },
     };
 
@@ -222,6 +228,10 @@ fn draw_template_info(template: &TicketTemplate, frame: &mut Frame, area: Rect) 
     if let Some(t) = &template.team {
         parts.push(meta_label("  team: "));
         parts.push(Span::raw(t.as_str()));
+    }
+    if let Some(fv) = &template.fix_version {
+        parts.push(meta_label("  fix version: "));
+        parts.push(Span::raw(fv.as_str()));
     }
     frame.render_widget(Paragraph::new(Line::from(parts)), area);
 }

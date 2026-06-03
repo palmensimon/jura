@@ -99,6 +99,8 @@ pub struct TicketTemplate {
     pub team: Option<String>,
     #[serde(default)]
     pub assignee: Option<String>,
+    #[serde(default)]
+    pub fix_version: Option<String>,
 }
 
 /// Holds user-specific settings. Serialized as `user_settings.yaml`.

@@ -122,6 +122,12 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
                 app.toggle_assignment(&issue);
             }
         }
+        KeyCode::Char('r') => {
+            if let AppView::TicketDetail { issue } = &app.view {
+                let key = issue.key.clone();
+                app.reload_issue(key);
+            }
+        }
         KeyCode::Char('b') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let url = format!("{}/browse/{}", app.config.jira.base_url, issue.key);
@@ -178,7 +184,7 @@ pub fn draw(app: &App, state: &mut DetailState, frame: &mut Frame, area: Rect) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // header
-            Constraint::Length(6), // metadata
+            Constraint::Length(7), // metadata
             Constraint::Min(0),    // description
         ])
         .split(area);
@@ -308,6 +314,10 @@ fn draw_metadata(issue: &Issue, frame: &mut Frame, area: Rect) {
         Line::from(vec![
             meta_label("Labels:   "),
             Span::raw(issue.fields.labels.join(", ")),
+        ]),
+        Line::from(vec![
+            meta_label("Fix Version: "),
+            Span::raw(issue.fix_version_names().join(", ")),
         ]),
     ]);
 

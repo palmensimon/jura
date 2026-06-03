@@ -46,7 +46,7 @@ impl JiraClient {
             .query(&[
                 ("jql", jql),
                 ("maxResults", &max_results.to_string()),
-                ("fields", "summary,status,issuetype,priority,assignee,components,labels,parent,description,customfield_10020"),
+                ("fields", "summary,status,issuetype,priority,assignee,components,labels,parent,description,customfield_10020,fixVersions"),
             ])
             .send()
             .await
@@ -66,7 +66,7 @@ impl JiraClient {
         let resp = self
             .client
             .get(&url)
-            .query(&[("fields", "summary,status,issuetype,priority,assignee,components,labels,parent,description,customfield_10020")])
+            .query(&[("fields", "summary,status,issuetype,priority,assignee,components,labels,parent,description,customfield_10020,fixVersions")])
             .send()
             .await
             .with_context(|| format!("Failed to fetch issue {key}"))?;

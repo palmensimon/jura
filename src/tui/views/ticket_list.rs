@@ -264,7 +264,7 @@ fn build_issue_row<'a>(issue: &'a crate::jira::Issue, current_branch_key: Option
     let status_color = match issue.status() {
         "Done" | "Closed" | "Resolved" => Color::Green,
         "In Progress" | "In Review" => Color::Yellow,
-        "To Do" | "Open" => Color::Blue,
+        "To Do" | "Open" => Color::Cyan,
         _ => Color::White,
     };
     let is_checked_out = current_branch_key == Some(issue.key.as_str());

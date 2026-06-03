@@ -244,7 +244,7 @@ pub fn draw(app: &App, state: &mut TransitionState, frame: &mut Frame, area: Rec
             let status_color = match t.to.name.as_str() {
                 "Done" | "Closed" | "Resolved" => Color::Green,
                 "In Progress" | "In Review" => Color::Yellow,
-                "To Do" | "Open" => Color::DarkGray,
+                "To Do" | "Open" => Color::Cyan,
                 _ => Color::White,
             };
             let line = Line::from(vec![

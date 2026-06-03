@@ -22,8 +22,6 @@ Config is stored in the platform default location:
 - **macOS:** `~/Library/Application Support/jura/`
 - **Windows:** `%APPDATA%\jura\`
 
-Two files are generated:
-
 | File | Purpose | Edit via |
 |---|---|---|
 | `config.yaml` | Jira credentials (`base_url`, `token`) | TUI `s` → Settings, or directly |
@@ -39,12 +37,4 @@ Two files are generated:
 | `jura ticket <KEY>` | Full details for a ticket |
 | `jura current` | Full details for the ticket linked to the current git branch |
 | `jura init` | Write example config files |
-| `jura install-skill [--path <file>]` | Write the AI skill file |
-
-The local cache is populated when you open the Mine tab in the TUI.
-
-## AI Integration
-
-Run `jura install-skill` to create a `jura-cli/` directory containing `SKILL.md` (or `--path <dir>` to place it elsewhere), then install it in your AI agent.
-
-This gives your agent read-only access to your cached Jira tickets via the CLI commands above.
+| `jura install-skill [--path <file>]` | Write the cli AI skill file |

@@ -31,7 +31,7 @@ impl SettingsState {
         inputs[F_BASE_URL] = single_line_area(&config.jira.base_url);
         inputs[F_TOKEN] = single_line_area(&config.jira.token);
         inputs[F_PROJECT] = single_line_area(config.defaults.project.as_deref().unwrap_or(""));
-        inputs[F_SPRINT] = single_line_area(&config.active_sprint_id.map(|id| id.to_string()).unwrap_or_default());
+        inputs[F_SPRINT] = single_line_area(&config.board_id.map(|id| id.to_string()).unwrap_or_default());
 
         let mut state = Self { inputs, active: 0, editing: false };
         state.refresh_styles();
@@ -75,16 +75,16 @@ impl SettingsState {
         if token.is_empty() {
             return Err("Token / PAT is required".to_string());
         }
-        let active_sprint_id = if sprint.is_empty() {
+        let board_id = if sprint.is_empty() {
             None
         } else {
-            Some(sprint.parse::<u64>().map_err(|_| "Active Sprint ID must be a number".to_string())?)
+            Some(sprint.parse::<u64>().map_err(|_| "Board ID must be a number".to_string())?)
         };
         let mut defaults = existing.defaults.clone();
         defaults.project = if project.is_empty() { None } else { Some(project) };
         Ok(Config {
             jira: JiraConfig { base_url, token },
-            active_sprint_id,
+            board_id,
             defaults,
         })
     }
@@ -217,7 +217,7 @@ fn field_label(idx: usize) -> &'static str {
         F_BASE_URL => "[1] Base URL",
         F_TOKEN => "[2] Token / PAT",
         F_PROJECT => "[3] Default Project",
-        F_SPRINT => "[4] Active Sprint ID",
+        F_SPRINT => "[4] Board ID",
         _ => "",
     }
 }

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub struct Config {
     pub jira: JiraConfig,
     #[serde(default)]
-    pub active_sprint_id: Option<u64>,
+    pub board_id: Option<u64>,
     #[serde(default)]
     pub defaults: Defaults,
 }
@@ -151,12 +151,12 @@ pub fn save_config(config: &Config) -> Result<()> {
     struct CredFile<'a> {
         jira: &'a JiraConfig,
         #[serde(skip_serializing_if = "Option::is_none")]
-        active_sprint_id: Option<u64>,
+        board_id: Option<u64>,
     }
     let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
     let path = dir.join("config.yaml");
-    let yaml = serde_yaml::to_string(&CredFile { jira: &config.jira, active_sprint_id: config.active_sprint_id })
+    let yaml = serde_yaml::to_string(&CredFile { jira: &config.jira, board_id: config.board_id })
         .context("Failed to serialize config")?;
     std::fs::write(&path, yaml)
         .with_context(|| format!("Failed to write config to {}", path.display()))

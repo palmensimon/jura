@@ -203,7 +203,32 @@ impl JiraClient {
         Ok(())
     }
 
-    pub async fn move_to_active_sprint(&self, issue_key: &str, sprint_id: u64) -> Result<()> {
+    pub async fn get_active_sprint_id(&self, board_id: u64) -> Result<u64> {
+        let url = format!("{}/rest/agile/1.0/board/{board_id}/sprint", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("state", "active")])
+            .send()
+            .await
+            .with_context(|| format!("Failed to fetch sprints for board {board_id}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get sprints returned {status}: {body}");
+        }
+
+        let list: SprintList = resp.json().await.context("Failed to parse sprint list")?;
+        list.values
+            .into_iter()
+            .next()
+            .map(|s| s.id)
+            .ok_or_else(|| anyhow::anyhow!("No active sprint found for board {board_id}"))
+    }
+
+    pub async fn move_to_active_sprint(&self, issue_key: &str, board_id: u64) -> Result<()> {
+        let sprint_id = self.get_active_sprint_id(board_id).await?;
         self.assign_issue_to_sprint(sprint_id, issue_key).await
     }
 

@@ -74,7 +74,7 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
                 let client = app.client.clone();
                 let tx = app.event_tx.clone();
                 let sprint_triggers = app.config.defaults.sprint_on_transition.clone();
-                let active_sprint_id = app.config.active_sprint_id;
+                let board_id = app.config.board_id;
                 state.loading = true;
                 tokio::spawn(async move {
                     match client.do_transition(&key_str, &transition_id).await {
@@ -84,7 +84,7 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
                         Ok(()) => {
                             let _ = tx.send(AppEvent::TransitionApplied(key_str.clone())).await;
                             if sprint_triggers.iter().any(|s| s.eq_ignore_ascii_case(&to_status)) {
-                                match active_sprint_id {
+                                match board_id {
                                     Some(id) => {
                                         if let Err(e) = client.move_to_active_sprint(&key_str, id).await {
                                             let _ = tx.send(AppEvent::Error(format!("Sprint assign: {e:#}"))).await;
@@ -92,7 +92,7 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
                                     }
                                     None => {
                                         let _ = tx.send(AppEvent::Error(
-                                            "Sprint assign: active_sprint_id is not set in user_settings.yaml".to_string()
+                                            "Sprint assign: board_id is not set in config.yaml".to_string()
                                         )).await;
                                     }
                                 }

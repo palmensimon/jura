@@ -272,3 +272,14 @@ pub struct TransitionRef {
     pub id: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct Sprint {
+    pub id: u64,
+    pub name: String,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SprintList {
+    pub values: Vec<Sprint>,
+}

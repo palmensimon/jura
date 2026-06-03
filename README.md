@@ -12,6 +12,8 @@ cargo install --git https://github.com/palmensimon/jura.git
 
 ## Configuration
 
+Generate configuration files:
+
 ```sh
 jura init
 ```

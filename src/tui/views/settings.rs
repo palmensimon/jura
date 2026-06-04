@@ -9,7 +9,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tui_textarea::TextArea;
 
 use crate::{
-    config::{Config, JiraConfig, save_config, save_settings},
+    config::{Config, JiraConfig, save_config},
     tui::app::{App, AppEvent, AppView},
 };
 
@@ -30,7 +30,7 @@ impl SettingsState {
         let mut inputs = std::array::from_fn(|_| TextArea::default());
         inputs[F_BASE_URL] = single_line_area(&config.jira.base_url);
         inputs[F_TOKEN] = single_line_area(&config.jira.token);
-        inputs[F_PROJECT] = single_line_area(config.defaults.project.as_deref().unwrap_or(""));
+        inputs[F_PROJECT] = single_line_area(config.project.as_deref().unwrap_or(""));
         inputs[F_SPRINT] = single_line_area(&config.board_id.map(|id| id.to_string()).unwrap_or_default());
 
         let mut state = Self { inputs, active: 0, editing: false };
@@ -80,12 +80,11 @@ impl SettingsState {
         } else {
             Some(sprint.parse::<u64>().map_err(|_| "Board ID must be a number".to_string())?)
         };
-        let mut defaults = existing.defaults.clone();
-        defaults.project = if project.is_empty() { None } else { Some(project) };
         Ok(Config {
             jira: JiraConfig { base_url, token },
             board_id,
-            defaults,
+            project: if project.is_empty() { None } else { Some(project) },
+            defaults: existing.defaults.clone(),
         })
     }
 }
@@ -96,8 +95,7 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
     if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
         match state.build_config(&app.config) {
             Ok(new_cfg) => {
-                let save_result = save_config(&new_cfg)
-                    .and_then(|_| save_settings(&new_cfg.defaults));
+                let save_result = save_config(&new_cfg);
                 if let Err(e) = save_result {
                     app.error = Some(format!("Save failed: {e:#}"));
                 } else {

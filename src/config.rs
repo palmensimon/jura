@@ -8,6 +8,8 @@ pub struct Config {
     #[serde(default)]
     pub board_id: Option<u64>,
     #[serde(default)]
+    pub project: Option<String>,
+    #[serde(default)]
     pub defaults: Defaults,
 }
 
@@ -19,7 +21,6 @@ pub struct JiraConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Defaults {
-    pub project: Option<String>,
     #[serde(default)]
     pub max_results: Option<u32>,
     #[serde(default)]
@@ -152,11 +153,13 @@ pub fn save_config(config: &Config) -> Result<()> {
         jira: &'a JiraConfig,
         #[serde(skip_serializing_if = "Option::is_none")]
         board_id: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        project: Option<String>,
     }
     let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
     let path = dir.join("config.yaml");
-    let yaml = serde_yaml::to_string(&CredFile { jira: &config.jira, board_id: config.board_id })
+    let yaml = serde_yaml::to_string(&CredFile { jira: &config.jira, board_id: config.board_id, project: config.project.clone() })
         .context("Failed to serialize config")?;
     std::fs::write(&path, yaml)
         .with_context(|| format!("Failed to write config to {}", path.display()))
@@ -190,8 +193,16 @@ pub fn write_example_config() -> Result<()> {
         std::fs::write(
             &config_path,
             r#"jira:
+  # Your Jira instance base URL (no trailing slash)
   base_url: "https://jira.yourcompany.com"
+  # Personal access token (Jira → Account → Personal Access Tokens)
   token: "your-personal-access-token"
+
+# Optional: default Jira project key (e.g. "PROJ")
+# project: "PROJ"
+
+# Optional: board ID used for sprint queries (found in the board URL: ?rapidView=<id>)
+# board_id: 42
 "#,
         )?;
     }
@@ -201,9 +212,6 @@ pub fn write_example_config() -> Result<()> {
         std::fs::write(
             &user_settings_path,
             r#"defaults:
-  # Jira project key to filter by default (e.g. "PROJ")
-  project: ~
-
   # Maximum number of tickets to fetch
   max_results: 50
 
@@ -233,10 +241,17 @@ pub fn write_example_config() -> Result<()> {
 
   # Default filter applied on startup
   default_filter:
+    # Statuses to include (empty = no status filter)
     statuses: []
+    # Statuses to hide within this filter (empty = use top-level hidden_statuses)
+    hidden_statuses: []
+    # Component to pre-select (empty = no component filter)
     component: ~
+    # Labels to pre-select (empty = no label filter)
     labels: []
+    # Team id to pre-select (empty = no team filter)
     team: ~
+    # Only show tickets in the active sprint when true
     sprint_active_only: false
     sort_by: "updated"   # updated | created | priority
     sort_dir: "desc"     # desc | asc
@@ -244,7 +259,6 @@ pub fn write_example_config() -> Result<()> {
 # ── Example filled configuration ─────────────────────────────────────────────
 #
 # defaults:
-#   project: "SWISH"
 #   max_results: 200
 #   hidden_statuses:
 #     - "Won't Do"
@@ -271,6 +285,7 @@ pub fn write_example_config() -> Result<()> {
 #       name: "Platform"
 #   default_filter:
 #     statuses: []
+#     hidden_statuses: []
 #     component: ~
 #     labels: []
 #     team: "49"
@@ -289,12 +304,13 @@ pub fn write_example_config() -> Result<()> {
   - name: "Feature"
     project: "PROJ"
     issue_type: "Story"
-    component: "frontend"       # optional
-    epic: "PROJ-1"              # optional — links to epic via customfield_10014
-    team: "42"                  # optional — customfield_10001 (plain string team id)
+    component: "frontend"        # optional
+    epic: "PROJ-1"               # optional — links to epic via customfield_10014
+    team: "42"                   # optional — customfield_10001 (plain string team id)
     assignee: "user@example.com" # optional — Jira username / email
-    labels: ["frontend"]        # optional
-    priority: "Medium"          # optional
+    labels: ["frontend"]         # optional
+    priority: "Medium"           # optional
+    fix_version: "v1.2.0"        # optional — fix version name
 
   - name: "Bug Fix"
     project: "PROJ"

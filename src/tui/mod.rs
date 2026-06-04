@@ -310,7 +310,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                     .filter
                                     .project
                                     .clone()
-                                    .or_else(|| app.config.defaults.project.clone());
+                                    .or_else(|| app.config.project.clone());
                                 let tx = app.event_tx.clone();
                                 tokio::spawn(async move {
                                     let statuses =

@@ -176,7 +176,7 @@ impl FilterState {
         let order = format!("ORDER BY {sort_col} {sort_dir}");
         let mut conditions = vec![];
 
-        if let Some(proj) = self.project.as_deref().or(config.defaults.project.as_deref()) {
+        if let Some(proj) = self.project.as_deref().or(config.project.as_deref()) {
             conditions.push(format!("project = {proj}"));
         }
         if let Some(comp) = &self.component {
@@ -244,7 +244,7 @@ impl FilterState {
         };
 
         Self {
-            project: config.defaults.project.clone(),
+            project: config.project.clone(),
             component: df.component.clone(),
             selected_statuses,
             hidden_statuses,

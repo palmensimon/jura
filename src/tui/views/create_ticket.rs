@@ -28,6 +28,7 @@ impl CreateState {
     pub fn new() -> Self {
         let mut summary = TextArea::default();
         summary.set_placeholder_text("Issue summary (required)");
+        summary.set_cursor_line_style(Style::default());
         summary.set_block(
             Block::default()
                 .borders(Borders::ALL)
@@ -37,6 +38,7 @@ impl CreateState {
 
         let mut description = TextArea::default();
         description.set_placeholder_text("Description (optional)");
+        description.set_cursor_line_style(Style::default());
         description.set_block(
             Block::default()
                 .borders(Borders::ALL)
@@ -82,16 +84,18 @@ pub fn handle_key(app: &mut App, state: &mut CreateState, key: KeyEvent) {
     }
 }
 
-fn update_field_styles(state: &mut CreateState) {
+pub fn update_field_styles(state: &mut CreateState) {
     let active = Style::default().fg(Color::Yellow);
     let inactive = Style::default().fg(Color::DarkGray);
 
+    state.summary_input.set_cursor_line_style(Style::default());
     state.summary_input.set_block(
         Block::default()
             .borders(Borders::ALL)
             .title(" Summary ")
             .border_style(if state.active_field == 0 { active } else { inactive }),
     );
+    state.description_input.set_cursor_line_style(Style::default());
     state.description_input.set_block(
         Block::default()
             .borders(Borders::ALL)

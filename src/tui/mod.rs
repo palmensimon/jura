@@ -370,7 +370,39 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             transition_picker::handle_key(&mut app, &mut transition_state, key);
                         }
                         AppView::CreateTicket => {
-                            create_ticket::handle_key(&mut app, &mut create_state, key)
+                            if key.code == KeyCode::Char('e') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                                let current_content = match create_state.active_field {
+                                    0 => create_state.summary_input.lines().join("\n"),
+                                    1 => create_state.description_input.lines().join("\n"),
+                                    _ => String::new(),
+                                };
+                                let tmp_path = std::env::temp_dir().join("jura_edit.tmp");
+                                let _ = std::fs::write(&tmp_path, &current_content);
+                                disable_raw_mode().ok();
+                                execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture).ok();
+                                let editor = std::env::var("VISUAL")
+                                    .or_else(|_| std::env::var("EDITOR"))
+                                    .unwrap_or_else(|_| "vi".to_string());
+                                let _ = std::process::Command::new(&editor).arg(&tmp_path).status();
+                                enable_raw_mode().ok();
+                                execute!(std::io::stdout(), EnterAlternateScreen, EnableMouseCapture).ok();
+                                terminal.clear().ok();
+                                if let Ok(new_content) = std::fs::read_to_string(&tmp_path) {
+                                    let lines: Vec<String> = new_content.lines().map(String::from).collect();
+                                    match create_state.active_field {
+                                        0 => {
+                                            create_state.summary_input = tui_textarea::TextArea::from(lines);
+                                        }
+                                        1 => {
+                                            create_state.description_input = tui_textarea::TextArea::from(lines);
+                                        }
+                                        _ => {}
+                                    }
+                                    create_ticket::update_field_styles(&mut create_state);
+                                }
+                            } else {
+                                create_ticket::handle_key(&mut app, &mut create_state, key)
+                            }
                         }
                         AppView::Settings => {
                             if key.code == KeyCode::Char('d') && key.modifiers.contains(KeyModifiers::CONTROL) {

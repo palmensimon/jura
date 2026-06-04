@@ -90,6 +90,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
             "Create Ticket",
             &[
                 ("Ctrl+S", "Submit"),
+                ("Ctrl+E", "Edit in $EDITOR"),
             ],
         ),
     ];
@@ -233,6 +234,7 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
         ],
         AppView::CreateTicket => &[
             ("Ctrl+S", "submit"),
+            ("Ctrl+E", "edit in $EDITOR"),
             ("?", "help"),
         ],
     }

@@ -25,6 +25,8 @@ pub struct Defaults {
     pub max_results: Option<u32>,
     #[serde(default)]
     pub assign_on_checkout: bool,
+    #[serde(default)]
+    pub browser: Option<String>,
     /// Statuses excluded from results when no explicit status filter is active (empty = hide nothing)
     #[serde(default = "default_hidden_statuses")]
     pub hidden_statuses: Vec<String>,

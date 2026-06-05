@@ -283,7 +283,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             } else if key.code == KeyCode::Char('b') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue() {
                                     let url = format!("{}/browse/{}", app.config.jira.base_url, issue.key);
-                                    let _ = open_url(&url);
+                                    let _ = open_url(&url, app.config.defaults.browser.as_deref());
                                 }
                             } else if key.code == KeyCode::Char('o') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue() {
@@ -291,7 +291,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         if let Some(branch) = &app.current_branch_name {
                                             match new_pr_url(branch) {
                                                 None => app.error = Some("Could not build PR URL — unknown remote or no origin".to_string()),
-                                                Some(url) => { let _ = open_url(&url); }
+                                                Some(url) => { let _ = open_url(&url, app.config.defaults.browser.as_deref()); }
                                             }
                                         }
                                     } else {
@@ -411,7 +411,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             } else if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
                                 open_in_nvim(config_dir().join("templates.yaml"));
                                 terminal.clear().ok();
-                            } else if key.code == KeyCode::Char('r') {
+                            } else if key.code == KeyCode::Char('r') && !settings_state.is_editing() {
                                 let mut reload_ok = true;
                                 match crate::config::load_config() {
                                     Ok(new_cfg) => {

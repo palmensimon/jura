@@ -147,8 +147,20 @@ pub fn checkout_branch(branch: &str) -> Result<()> {
     Ok(())
 }
 
-/// Opens a URL in the default browser, using the appropriate command for the OS.
-pub fn open_url(url: &str) -> Result<()> {
+/// Opens a URL in a browser, detached so the TUI is not blocked.
+/// Uses `browser` if provided, otherwise the OS default.
+pub fn open_url(url: &str, browser: Option<&str>) -> Result<()> {
+    if let Some(b) = browser {
+        Command::new(b)
+            .arg(url)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .with_context(|| format!("Failed to launch browser '{b}'"))?;
+        return Ok(());
+    }
+
     #[cfg(target_os = "macos")]
     let cmd = "open";
 
@@ -159,23 +171,22 @@ pub fn open_url(url: &str) -> Result<()> {
     let cmd = "cmd";
 
     #[cfg(target_os = "windows")]
-    let output = Command::new(cmd)
+    Command::new(cmd)
         .args(["/C", "start", url])
-        .output()
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .context("Failed to open URL")?;
 
     #[cfg(not(target_os = "windows"))]
-    let output = Command::new(cmd)
+    Command::new(cmd)
         .arg(url)
-        .output()
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .context("Failed to open URL")?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "Failed to open URL: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
 
     Ok(())
 }

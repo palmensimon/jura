@@ -131,7 +131,7 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
         KeyCode::Char('b') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let url = format!("{}/browse/{}", app.config.jira.base_url, issue.key);
-                let _ = open_url(&url);
+                let _ = open_url(&url, app.config.defaults.browser.as_deref());
             }
         }
         KeyCode::Char('o') => {
@@ -140,7 +140,7 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
                     if let Some(branch) = &app.current_branch_name {
                         match new_pr_url(branch) {
                             None => app.error = Some("Could not build PR URL — unknown remote or no origin".to_string()),
-                            Some(url) => { let _ = open_url(&url); }
+                            Some(url) => { let _ = open_url(&url, app.config.defaults.browser.as_deref()); }
                         }
                     }
                 } else {

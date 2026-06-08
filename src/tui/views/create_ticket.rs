@@ -56,6 +56,17 @@ impl CreateState {
     }
 }
 
+pub fn handle_paste(state: &mut CreateState, text: &str) {
+    if state.loading {
+        return;
+    }
+    match state.active_field {
+        0 => { state.summary_input.insert_str(text); }
+        1 => { state.description_input.insert_str(text); }
+        _ => {}
+    }
+}
+
 pub fn handle_key(app: &mut App, state: &mut CreateState, key: KeyEvent) {
     if state.loading {
         return;

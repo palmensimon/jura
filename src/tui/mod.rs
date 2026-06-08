@@ -7,8 +7,8 @@ use ratatui::{
     backend::CrosstermBackend,
     crossterm::{
         event::{
-            self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
-            KeyModifiers, MouseEventKind,
+            self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste,
+            EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
         },
         execute,
         terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -38,7 +38,7 @@ use crate::{
 pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -155,6 +155,12 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                     continue; // timeout or error — redraw and wait again without blocking
                 }
                 match event::read() {
+                    Ok(Event::Paste(ref text)) => {
+                        if matches!(app.view, AppView::CreateTicket) {
+                            create_ticket::handle_paste(&mut create_state, text);
+                        }
+                        continue;
+                    }
                     Ok(Event::Mouse(mouse)) => {
                         let scroll_lines = 3usize;
                         match mouse.kind {
@@ -173,8 +179,10 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         continue;
                     }
                     Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
-                    // Global: ? toggles help
-                    if key.code == KeyCode::Char('?') {
+                    // Global: ? toggles help (suppress in text-input views)
+                    let in_text_input = matches!(app.view, AppView::CreateTicket)
+                        || (matches!(app.view, AppView::Settings) && settings_state.is_editing());
+                    if key.code == KeyCode::Char('?') && !in_text_input {
                         app.show_help = !app.show_help;
                         if app.show_help { app.help_scroll = 0; }
                         continue;
@@ -522,6 +530,6 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
     }
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture, DisableBracketedPaste)?;
     Ok(())
 }

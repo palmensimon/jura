@@ -5,4 +5,5 @@ pub mod settings;
 pub mod templates_panel;
 pub mod ticket_detail;
 pub mod ticket_list;
+pub mod ticket_search;
 pub mod transition_picker;

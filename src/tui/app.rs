@@ -133,6 +133,7 @@ pub enum AppView {
     CreateTicket,
     Settings,
     FilterPanel,
+    TicketSearch,
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +149,7 @@ pub enum AppEvent {
     IssueReloaded(Issue),
     UserLoaded(String),
     AssignmentChanged(Issue),
+    TicketFound(Issue),
     Error(String),
 }
 
@@ -456,6 +458,9 @@ impl App {
                     self.view = AppView::TicketDetail { issue: Box::new(issue) };
                 }
                 self.trigger_load();
+            }
+            AppEvent::TicketFound(issue) => {
+                self.view = AppView::TicketDetail { issue: Box::new(issue) };
             }
             AppEvent::Error(e) => {
                 self.error = Some(e);

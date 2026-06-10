@@ -26,6 +26,7 @@ use views::{
     templates_panel::{self, TemplatesPanelResult, TemplatesPanelState},
     ticket_detail::{self, BranchPickState, DetailState},
     ticket_list,
+    ticket_search::{self, TicketSearchState},
     transition_picker::{self, TransitionState},
 };
 
@@ -50,6 +51,10 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
     let mut templates_panel_state = TemplatesPanelState::new();
     let mut transition_state = TransitionState::new();
     let mut detail_state = DetailState::new();
+    let mut ticket_search_state = TicketSearchState::new(
+        app.config.project.as_deref().or(app.filter.project.as_deref()),
+        AppView::TicketList,
+    );
 
     app.trigger_load();
 
@@ -104,6 +109,13 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                     }
                     transition_picker::draw(&app, &mut transition_state, frame, content_area);
                 }
+                AppView::TicketSearch => {
+                    match &ticket_search_state.prev_view {
+                        AppView::TicketDetail { .. } => ticket_detail::draw(&app, &mut detail_state, frame, content_area),
+                        _ => ticket_list::draw(&mut app, frame, content_area),
+                    }
+                    ticket_search::draw(&ticket_search_state, frame, content_area);
+                }
             }
 
             // Global bottom status bar
@@ -148,6 +160,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                 }
                 if app.error.is_some() {
                     create_state.loading = false;
+                    ticket_search_state.loading = false;
                 }
             }
             poll_result = tokio::task::spawn_blocking(|| event::poll(std::time::Duration::from_millis(50))) => {
@@ -208,6 +221,16 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
 
                     if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                         break;
+                    }
+
+                    if key.code == KeyCode::Char('k') && key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !matches!(app.view, AppView::TicketSearch)
+                    {
+                        let prev = app.view.clone();
+                        let project = app.config.project.as_deref().or(app.filter.project.as_deref());
+                        ticket_search_state = TicketSearchState::new(project, prev);
+                        app.view = AppView::TicketSearch;
+                        continue;
                     }
 
                     if key.code == KeyCode::Char('q') {
@@ -473,6 +496,9 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                     None => {}
                                 }
                             }
+                        }
+                        AppView::TicketSearch => {
+                            ticket_search::handle_key(&mut app, &mut ticket_search_state, key);
                         }
                         AppView::FilterPanel => {
                             match filter_panel::handle_key(&mut app, &mut filter_panel_state, key) {

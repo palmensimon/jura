@@ -24,6 +24,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
                 ("Esc", "Cancel / back"),
                 ("q  Ctrl+C", "Quit"),
                 ("?", "Toggle help"),
+                ("Ctrl+K", "Go to ticket by key"),
             ],
         ),
         (
@@ -236,6 +237,10 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
             ("Ctrl+S", "submit"),
             ("Ctrl+E", "edit in $EDITOR"),
             ("?", "help"),
+        ],
+        AppView::TicketSearch => &[
+            ("↵", "open ticket"),
+            ("Esc", "cancel"),
         ],
     }
 }

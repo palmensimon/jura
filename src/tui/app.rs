@@ -162,6 +162,7 @@ pub struct FilterState {
     pub text_search: String,
     pub labels: Vec<String>,
     pub team: Option<String>,
+    pub epic: Option<String>,
     pub sprint_active_only: bool,
     pub assigned_to_me: bool,
     pub sort_by: SortBy,
@@ -216,6 +217,11 @@ impl FilterState {
                 }
             }
         }
+        if let Some(epic) = &self.epic {
+            if !epic.is_empty() {
+                conditions.push(format!("\"Epic Link\" = \"{epic}\""));
+            }
+        }
         if !self.labels.is_empty() {
             let joined = self.labels
                 .iter()
@@ -253,6 +259,7 @@ impl FilterState {
             text_search: String::new(),
             labels: df.labels.clone(),
             team: df.team.clone(),
+            epic: df.epic.clone(),
             sprint_active_only: df.sprint_active_only,
             assigned_to_me: false,
             sort_by: SortBy::from_str(&df.sort_by),
@@ -271,6 +278,7 @@ impl Default for FilterState {
             text_search: String::new(),
             labels: vec![],
             team: None,
+            epic: None,
             sprint_active_only: false,
             assigned_to_me: false,
             sort_by: SortBy::default(),

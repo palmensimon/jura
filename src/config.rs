@@ -44,6 +44,9 @@ pub struct Defaults {
     /// Teams available as options in the filter panel (empty = no team filter shown)
     #[serde(default)]
     pub visible_teams: Vec<TeamEntry>,
+    /// Epics available as options in the filter panel (empty = no epic filter shown)
+    #[serde(default)]
+    pub visible_epics: Vec<EpicEntry>,
     /// Statuses that trigger auto-assignment to the active sprint on transition (empty = disabled)
     #[serde(default)]
     pub sprint_on_transition: Vec<String>,
@@ -51,6 +54,12 @@ pub struct Defaults {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TeamEntry {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EpicEntry {
     pub id: String,
     pub name: String,
 }
@@ -71,6 +80,8 @@ pub struct DefaultFilter {
     pub labels: Vec<String>,
     #[serde(default)]
     pub team: Option<String>,
+    #[serde(default)]
+    pub epic: Option<String>,
     #[serde(default)]
     pub sprint_active_only: bool,
     #[serde(default)]
@@ -237,6 +248,10 @@ pub fn write_example_config() -> Result<()> {
   # Each entry needs an id (the value sent to Jira) and a name (shown in the UI).
   visible_teams: []
 
+  # Epics shown as selectable options in the [7] Epic filter row (empty = row hidden)
+  # Each entry needs an id (the Jira issue key, e.g. "PROJ-123") and a name (shown in the UI).
+  visible_epics: []
+
   # Statuses that trigger auto-assignment to the active sprint when transitioning a ticket.
   # Leave empty (default) to disable. Example: ["To Do", "In Progress", "In Review"]
   sprint_on_transition: []
@@ -253,6 +268,8 @@ pub fn write_example_config() -> Result<()> {
     labels: []
     # Team id to pre-select (empty = no team filter)
     team: ~
+    # Epic id (issue key) to pre-select (empty = no epic filter)
+    epic: ~
     # Only show tickets in the active sprint when true
     sprint_active_only: false
     sort_by: "updated"   # updated | created | priority
@@ -285,12 +302,18 @@ pub fn write_example_config() -> Result<()> {
 #       name: "Mobile"
 #     - id: "12"
 #       name: "Platform"
+#   visible_epics:
+#     - id: "PROJ-100"
+#       name: "Q3 Initiative"
+#     - id: "PROJ-200"
+#       name: "Platform Improvements"
 #   default_filter:
 #     statuses: []
 #     hidden_statuses: []
 #     component: ~
 #     labels: []
 #     team: "49"
+#     epic: ~
 #     sprint_active_only: true
 #     sort_by: "updated"
 #     sort_dir: "desc"

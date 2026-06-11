@@ -8,7 +8,7 @@ use ratatui::{
 };
 use tui_textarea::TextArea;
 
-use crate::config::TeamEntry;
+use crate::config::{EpicEntry, TeamEntry};
 use crate::tui::app::{App, FilterState, SortBy, SortDir};
 
 // ── Row enum ─────────────────────────────────────────────────────────────────
@@ -21,17 +21,18 @@ pub enum ActiveRow {
     Component,
     Labels,
     Team,
+    Epic,
     AssignedToMe,
     SprintActive,
     SortBy,
     SortDir,
 }
 
-const ROW_COUNT: usize = 10;
+const ROW_COUNT: usize = 11;
 
-// Visual row heights in order: text_search, status, hidden_status, component, labels, team,
-// assigned_to_me, sprint_active, sort. SortBy and SortDir (logical rows 8+9) share visual row 8.
-const ROW_HEIGHTS: [u16; 9] = [3, 5, 5, 5, 5, 5, 3, 3, 3];
+// Visual row heights in order: text_search, status, hidden_status, component, labels, team, epic,
+// assigned_to_me, sprint_active, sort. SortBy and SortDir (logical rows 9+10) share visual row 9.
+const ROW_HEIGHTS: [u16; 10] = [3, 5, 5, 5, 5, 5, 5, 3, 3, 3];
 
 fn visible_row_range(start: usize, available: u16) -> std::ops::Range<usize> {
     let mut h = 0u16;
@@ -54,10 +55,11 @@ impl ActiveRow {
             ActiveRow::Component => 3,
             ActiveRow::Labels => 4,
             ActiveRow::Team => 5,
-            ActiveRow::AssignedToMe => 6,
-            ActiveRow::SprintActive => 7,
-            ActiveRow::SortBy => 8,
-            ActiveRow::SortDir => 9,
+            ActiveRow::Epic => 6,
+            ActiveRow::AssignedToMe => 7,
+            ActiveRow::SprintActive => 8,
+            ActiveRow::SortBy => 9,
+            ActiveRow::SortDir => 10,
         }
     }
 
@@ -69,9 +71,10 @@ impl ActiveRow {
             3 => ActiveRow::Component,
             4 => ActiveRow::Labels,
             5 => ActiveRow::Team,
-            6 => ActiveRow::AssignedToMe,
-            7 => ActiveRow::SprintActive,
-            8 => ActiveRow::SortBy,
+            6 => ActiveRow::Epic,
+            7 => ActiveRow::AssignedToMe,
+            8 => ActiveRow::SprintActive,
+            9 => ActiveRow::SortBy,
             _ => ActiveRow::SortDir,
         }
     }
@@ -86,6 +89,7 @@ pub struct FilterPanelState {
     pub component_cursor: usize,
     pub labels_cursor: usize,
     pub team_cursor: usize,
+    pub epic_cursor: usize,
     pub assigned_to_me: bool,
     pub sprint_active_only: bool,
     pub sort_by: SortBy,
@@ -95,6 +99,7 @@ pub struct FilterPanelState {
     pub selected_labels: Vec<String>,
     pub selected_component: Option<String>,
     pub selected_team: Option<String>,
+    pub selected_epic: Option<String>,
     pub active_row: ActiveRow,
     pub text_editing: bool,
     pub scroll_start: usize,
@@ -116,6 +121,7 @@ impl FilterPanelState {
             component_cursor: 0,
             labels_cursor: 0,
             team_cursor: 0,
+            epic_cursor: 0,
             assigned_to_me: filter.assigned_to_me,
             sprint_active_only: filter.sprint_active_only,
             sort_by: filter.sort_by,
@@ -125,6 +131,7 @@ impl FilterPanelState {
             selected_labels: filter.labels.clone(),
             selected_component: filter.component.clone(),
             selected_team: filter.team.clone(),
+            selected_epic: filter.epic.clone(),
             active_row: ActiveRow::TextSearch,
             text_editing: false,
             scroll_start: 0,
@@ -149,6 +156,7 @@ impl FilterPanelState {
             text_search,
             labels: self.selected_labels.clone(),
             team: self.selected_team.clone(),
+            epic: self.selected_epic.clone(),
             sprint_active_only: self.sprint_active_only,
             assigned_to_me: self.assigned_to_me,
             sort_by: self.sort_by,
@@ -167,11 +175,11 @@ impl FilterPanelState {
     }
 
     pub fn update_scroll(&mut self, available: u16) {
-        let active = self.active_row.index().min(8);
+        let active = self.active_row.index().min(9);
         if self.scroll_start > active {
             self.scroll_start = active;
         }
-        for _ in 0..9 {
+        for _ in 0..10 {
             let vis = visible_row_range(self.scroll_start, available);
             if vis.contains(&active) || vis.is_empty() { break; }
             self.scroll_start += 1;
@@ -203,9 +211,9 @@ pub fn handle_key(
             KeyCode::Char('4') => Some(ActiveRow::Component),
             KeyCode::Char('5') => Some(ActiveRow::Labels),
             KeyCode::Char('6') => Some(ActiveRow::Team),
-            KeyCode::Char('7') => Some(ActiveRow::AssignedToMe),
-            KeyCode::Char('8') => Some(ActiveRow::SprintActive),
-            KeyCode::Char('9') => Some(ActiveRow::SortBy),
+            KeyCode::Char('7') => Some(ActiveRow::Epic),
+            KeyCode::Char('8') => Some(ActiveRow::AssignedToMe),
+            KeyCode::Char('9') => Some(ActiveRow::SprintActive),
             _ => None,
         };
         if let Some(row) = target {
@@ -299,6 +307,14 @@ pub fn handle_key(
                 &mut state.selected_team,
             );
         }
+        ActiveRow::Epic => {
+            handle_epic_key(
+                key,
+                &app.config.defaults.visible_epics,
+                &mut state.epic_cursor,
+                &mut state.selected_epic,
+            );
+        }
         ActiveRow::AssignedToMe => {
             if key.code == KeyCode::Char(' ') {
                 state.assigned_to_me = !state.assigned_to_me;
@@ -380,6 +396,35 @@ fn handle_team_key(
                 *selected = None;
             } else {
                 *selected = teams.get(*cursor - 1).map(|t| t.id.clone());
+            }
+        }
+        _ => {}
+    }
+}
+
+fn handle_epic_key(
+    key: KeyEvent,
+    epics: &[EpicEntry],
+    cursor: &mut usize,
+    selected: &mut Option<String>,
+) {
+    let total = epics.len() + 1;
+    match key.code {
+        KeyCode::Left => {
+            if *cursor > 0 {
+                *cursor -= 1;
+            }
+        }
+        KeyCode::Right => {
+            if *cursor + 1 < total {
+                *cursor += 1;
+            }
+        }
+        KeyCode::Char(' ') => {
+            if *cursor == 0 {
+                *selected = None;
+            } else {
+                *selected = epics.get(*cursor - 1).map(|e| e.id.clone());
             }
         }
         _ => {}
@@ -606,21 +651,52 @@ pub fn draw(app: &App, state: &mut FilterPanelState, frame: &mut Frame, area: Re
                     chunk,
                 );
             }
-            // ── Bool toggles ──────────────────────────────────────────────────
+            // ── Epic single-select ────────────────────────────────────────────
             6 => {
+                let visible_epics = &app.config.defaults.visible_epics;
+                let epic_total = visible_epics.len() + 1;
+                if state.epic_cursor >= epic_total {
+                    state.epic_cursor = 0;
+                }
+                let epic_options: Vec<String> = std::iter::once("(all)".to_string())
+                    .chain(visible_epics.iter().map(|e| e.name.clone()))
+                    .collect();
+                let epic_selected: Vec<String> = match &state.selected_epic {
+                    None => vec!["(all)".to_string()],
+                    Some(id) => visible_epics
+                        .iter()
+                        .find(|e| &e.id == id)
+                        .map(|e| vec![e.name.clone()])
+                        .unwrap_or_default(),
+                };
+                frame.render_widget(
+                    Paragraph::new(option_list_text(
+                        &epic_options,
+                        &epic_selected,
+                        state.epic_cursor,
+                        state.active_row == ActiveRow::Epic,
+                        true,
+                    ))
+                    .block(focused_block(" [7] Epic ", state.active_row == ActiveRow::Epic))
+                    .wrap(Wrap { trim: false }),
+                    chunk,
+                );
+            }
+            // ── Bool toggles ──────────────────────────────────────────────────
+            7 => {
                 draw_toggle(
-                    frame, chunk, "Assigned to me", 7, state.assigned_to_me,
+                    frame, chunk, "Assigned to me", 8, state.assigned_to_me,
                     state.active_row == ActiveRow::AssignedToMe,
                 );
             }
-            7 => {
+            8 => {
                 draw_toggle(
-                    frame, chunk, "Sprint active only", 8, state.sprint_active_only,
+                    frame, chunk, "Sprint active only", 9, state.sprint_active_only,
                     state.active_row == ActiveRow::SprintActive,
                 );
             }
             // ── Sort ──────────────────────────────────────────────────────────
-            8 => {
+            9 => {
                 let sort_focused =
                     matches!(state.active_row, ActiveRow::SortBy | ActiveRow::SortDir);
                 let sort_line = Line::from(vec![
@@ -645,7 +721,7 @@ pub fn draw(app: &App, state: &mut FilterPanelState, frame: &mut Frame, area: Re
                 ]);
                 frame.render_widget(
                     Paragraph::new(sort_line)
-                        .block(focused_block(" [9] Sort ", sort_focused)),
+                        .block(focused_block(" Sort ", sort_focused)),
                     chunk,
                 );
             }

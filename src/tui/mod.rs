@@ -519,6 +519,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         component: filter.component.clone(),
                                         labels: filter.labels.clone(),
                                         team: filter.team.clone(),
+                                        epic: filter.epic.clone(),
                                         sprint_active_only: filter.sprint_active_only,
                                         sort_by: filter.sort_by.as_str().to_string(),
                                         sort_dir: filter.sort_dir.as_str().to_string(),

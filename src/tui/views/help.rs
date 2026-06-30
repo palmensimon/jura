@@ -40,6 +40,14 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
             ],
         ),
         (
+            "Ticket Detail  (scroll description)",
+            &[
+                ("↑/↓  j/k", "Scroll one line"),
+                ("Ctrl+U / Ctrl+D", "Scroll half page"),
+                ("PgUp / PgDn", "Scroll full page"),
+            ],
+        ),
+        (
             "Ticket List",
             &[
                 ("Enter", "Open detail"),
@@ -207,7 +215,8 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
             ("a", "assign self"),
             ("c", "checkout"),
             ("o", "open PR"),
-            ("b", "open in browser"),
+            ("b", "browser"),
+            ("j/k", "scroll"),
             ("r", "refresh"),
             ("?", "help"),
         ],

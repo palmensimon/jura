@@ -1,4 +1,4 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -24,11 +24,16 @@ pub enum BranchPickState {
 
 pub struct DetailState {
     pub branch_pick: BranchPickState,
+    pub scroll: u16,
 }
 
 impl DetailState {
     pub fn new() -> Self {
-        Self { branch_pick: BranchPickState::Idle }
+        Self { branch_pick: BranchPickState::Idle, scroll: 0 }
+    }
+
+    pub fn reset_scroll(&mut self) {
+        self.scroll = 0;
     }
 
     pub fn is_picking(&self) -> bool {
@@ -114,8 +119,23 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
 
     match key.code {
         KeyCode::Esc | KeyCode::Backspace => {
+            state.scroll = 0;
             app.view = AppView::TicketList;
         }
+        KeyCode::Up | KeyCode::Char('k') => {
+            state.scroll = state.scroll.saturating_sub(1);
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            state.scroll = state.scroll.saturating_add(1);
+        }
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            state.scroll = state.scroll.saturating_sub(10);
+        }
+        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            state.scroll = state.scroll.saturating_add(10);
+        }
+        KeyCode::PageUp => { state.scroll = state.scroll.saturating_sub(20); }
+        KeyCode::PageDown => { state.scroll = state.scroll.saturating_add(20); }
         KeyCode::Char('a') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let issue = issue.as_ref().clone();
@@ -191,7 +211,7 @@ pub fn draw(app: &App, state: &mut DetailState, frame: &mut Frame, area: Rect) {
 
     draw_header(issue, frame, chunks[0]);
     draw_metadata(issue, frame, chunks[1]);
-    draw_description(issue, frame, chunks[2]);
+    draw_description(issue, state, frame, chunks[2]);
 
     match &state.branch_pick {
         BranchPickState::Editing { .. } => draw_branch_editor(state, frame, area),
@@ -328,11 +348,8 @@ fn draw_metadata(issue: &Issue, frame: &mut Frame, area: Rect) {
     frame.render_widget(Paragraph::new(meta).block(block), area);
 }
 
-fn draw_description(issue: &Issue, frame: &mut Frame, area: Rect) {
-    let text = issue
-        .description_text()
-        .unwrap_or("(no description)")
-        .to_string();
+fn draw_description(issue: &Issue, state: &DetailState, frame: &mut Frame, area: Rect) {
+    let text = issue.description_text().unwrap_or("*(no description)*");
 
     let block = Block::default()
         .title(" Description ")
@@ -340,9 +357,13 @@ fn draw_description(issue: &Issue, frame: &mut Frame, area: Rect) {
         .borders(Borders::BOTTOM)
         .border_style(Style::default().fg(Color::DarkGray));
 
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let lines = crate::markdown::render(text, inner.width);
     frame.render_widget(
-        Paragraph::new(text).block(block).wrap(Wrap { trim: false }),
-        area,
+        Paragraph::new(lines).scroll((state.scroll, 0)).wrap(Wrap { trim: false }),
+        inner,
     );
 }
 

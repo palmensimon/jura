@@ -139,7 +139,11 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
             Some(app_event) = event_rx.recv() => {
                 let was_picking = matches!(app.view, AppView::TransitionPicker { .. });
                 let is_applied = matches!(app_event, AppEvent::TransitionApplied(_));
+                let was_in_detail = matches!(app.view, AppView::TicketDetail { .. });
                 app.handle_event(app_event);
+                if !was_in_detail && matches!(app.view, AppView::TicketDetail { .. }) {
+                    detail_state.reset_scroll();
+                }
                 // Refresh settings state when config changes
                 if matches!(app.view, AppView::Settings) {
                     settings_state = SettingsState::new(&app.config);
@@ -180,11 +184,15 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             MouseEventKind::ScrollUp => {
                                 if matches!(app.view, AppView::TicketList) {
                                     for _ in 0..scroll_lines { app.move_selection_up(); }
+                                } else if matches!(app.view, AppView::TicketDetail { .. }) {
+                                    detail_state.scroll = detail_state.scroll.saturating_sub(scroll_lines as u16);
                                 }
                             }
                             MouseEventKind::ScrollDown => {
                                 if matches!(app.view, AppView::TicketList) {
                                     for _ in 0..scroll_lines { app.move_selection_down(); }
+                                } else if matches!(app.view, AppView::TicketDetail { .. }) {
+                                    detail_state.scroll = detail_state.scroll.saturating_add(scroll_lines as u16);
                                 }
                             }
                             _ => {}
@@ -252,6 +260,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         execute!(std::io::stdout(), EnterAlternateScreen, EnableMouseCapture).ok();
                     };
 
+                    let prev_in_detail = matches!(app.view, AppView::TicketDetail { .. });
                     match app.view.clone() {
                         AppView::TicketList => {
                             if matches!(detail_state.branch_pick, BranchPickState::Editing { .. }) {
@@ -548,6 +557,9 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 None => {}
                             }
                         }
+                    }
+                    if !prev_in_detail && matches!(app.view, AppView::TicketDetail { .. }) {
+                        detail_state.reset_scroll();
                     }
                     } // end key event
                     _ => {}

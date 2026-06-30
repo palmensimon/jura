@@ -3,6 +3,7 @@ mod config;
 mod git;
 mod jira;
 mod cache;
+mod markdown;
 mod tui;
 
 use anyhow::Result;

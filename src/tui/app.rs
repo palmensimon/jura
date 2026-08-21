@@ -557,7 +557,7 @@ impl App {
         ts.visible_issues().get(ts.selected_row).copied()
     }
 
-    pub fn spawn_checkout(&self, branch: String, issue: &Issue) {
+    pub fn spawn_checkout(&self, branch: String, base: Option<String>, issue: &Issue) {
         let should_assign = self.config.defaults.assign_on_checkout
             && self.current_user_name.is_some()
             && issue.fields.assignee.as_ref()
@@ -570,7 +570,7 @@ impl App {
 
         tokio::spawn(async move {
             let b = branch.clone();
-            match tokio::task::spawn_blocking(move || crate::git::checkout_branch(&b))
+            match tokio::task::spawn_blocking(move || crate::git::checkout_branch(&b, base.as_deref()))
                 .await
                 .unwrap_or_else(|e| Err(anyhow::anyhow!("{e}")))
             {

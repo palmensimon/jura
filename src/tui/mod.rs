@@ -83,6 +83,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                     match &detail_state.branch_pick {
                         BranchPickState::Editing { .. } => ticket_detail::draw_branch_editor(&mut detail_state, frame, content_area),
                         BranchPickState::Picking { .. } => ticket_detail::draw_branch_picker(&detail_state, frame, content_area),
+                        BranchPickState::SelectingBase { .. } => ticket_detail::draw_base_picker(&detail_state, frame, content_area),
                         BranchPickState::Idle => {}
                     }
                 }
@@ -267,6 +268,8 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 ticket_detail::handle_branch_editor_key(&mut app, &mut detail_state, key);
                             } else if matches!(detail_state.branch_pick, BranchPickState::Picking { .. }) {
                                 ticket_detail::handle_branch_picker_key(&mut app, &mut detail_state, key);
+                            } else if matches!(detail_state.branch_pick, BranchPickState::SelectingBase { .. }) {
+                                ticket_detail::handle_base_picker_key(&mut app, &mut detail_state, key);
                             } else if key.code == KeyCode::Char('s') && !app.active_tab().local_search_active {
                                 settings_state = SettingsState::new(&app.config);
                                 app.view = AppView::Settings;
@@ -290,18 +293,6 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         }
                                     });
                                 }
-                            } else if key.code == KeyCode::Char('C') && !app.active_tab().local_search_active {
-                                if let Some(issue) = app.selected_issue().cloned() {
-                                    let branches = find_branches_for_ticket(&issue.key);
-                                    if branches.is_empty() {
-                                        let suggested = branch_name(&issue.key, issue.summary());
-                                        let mut ta = tui_textarea::TextArea::from([suggested.as_str()]);
-                                        ta.move_cursor(tui_textarea::CursorMove::End);
-                                        detail_state.branch_pick = BranchPickState::Editing { input: ta, issue };
-                                    } else {
-                                        detail_state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue };
-                                    }
-                                }
                             } else if key.code == KeyCode::Char('c') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
                                     let branches = find_branches_for_ticket(&issue.key);
@@ -312,7 +303,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                             ta.move_cursor(tui_textarea::CursorMove::End);
                                             detail_state.branch_pick = BranchPickState::Editing { input: ta, issue };
                                         }
-                                        1 => app.spawn_checkout(branches.into_iter().next().unwrap(), &issue),
+                                        1 => app.spawn_checkout(branches.into_iter().next().unwrap(), None, &issue),
                                         _ => detail_state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue },
                                     }
                                 }

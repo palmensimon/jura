@@ -54,15 +54,23 @@ pub fn current_branch() -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-/// Returns all local branches whose names contain `ticket_key` (case-insensitive).
-pub fn find_branches_for_ticket(ticket_key: &str) -> Vec<String> {
+/// Returns all local branch names.
+pub fn list_local_branches() -> Vec<String> {
     let Ok(output) = Command::new("git").args(["branch", "--list"]).output() else {
         return vec![];
     };
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let key = ticket_key.to_lowercase();
     stdout.lines()
         .map(|l| l.trim().trim_start_matches("* ").to_string())
+        .filter(|b| !b.is_empty())
+        .collect()
+}
+
+/// Returns all local branches whose names contain `ticket_key` (case-insensitive).
+pub fn find_branches_for_ticket(ticket_key: &str) -> Vec<String> {
+    let key = ticket_key.to_lowercase();
+    list_local_branches()
+        .into_iter()
         .filter(|b| b.to_lowercase().contains(&key))
         .collect()
 }
@@ -105,9 +113,16 @@ pub fn new_pr_url(branch: &str) -> Option<String> {
     }
 }
 
-pub fn create_branch(branch: &str) -> Result<()> {
+/// Creates and checks out `branch`, optionally based off `base` (defaults to
+/// branching off whatever is currently checked out).
+pub fn create_branch(branch: &str, base: Option<&str>) -> Result<()> {
+    let mut args = vec!["checkout", "-b", branch];
+    if let Some(base) = base {
+        args.push(base);
+    }
+
     let output = Command::new("git")
-        .args(["checkout", "-b", branch])
+        .args(&args)
         .output()
         .context("Failed to run git checkout")?;
 
@@ -121,8 +136,9 @@ pub fn create_branch(branch: &str) -> Result<()> {
     Ok(())
 }
 
-/// Check out `branch` if it exists locally, otherwise create and check it out.
-pub fn checkout_branch(branch: &str) -> Result<()> {
+/// Check out `branch` if it exists locally, otherwise create it (optionally
+/// based off `base`) and check it out.
+pub fn checkout_branch(branch: &str, base: Option<&str>) -> Result<()> {
     let list = Command::new("git")
         .args(["branch", "--list", branch])
         .output()
@@ -142,7 +158,7 @@ pub fn checkout_branch(branch: &str) -> Result<()> {
             );
         }
     } else {
-        create_branch(branch)?;
+        create_branch(branch, base)?;
     }
     Ok(())
 }

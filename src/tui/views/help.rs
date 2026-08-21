@@ -33,7 +33,6 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
                 ("t", "Change status"),
                 ("a", "Assign / unassign self"),
                 ("c", "Checkout / create branch"),
-                ("Shift+C", "Branch picker"),
                 ("o", "Open PR/MR in browser"),
                 ("b", "Open ticket in browser"),
                 ("⌫", "Back  (Detail only)"),
@@ -203,6 +202,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
 pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str)] {
     match view {
         AppView::TicketList => &[
+            ("t", "status"),
             ("c", "checkout"),
             ("/", "search"),
             ("f", "filter"),

@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 
 use app::{App, AppEvent, AppView, Tab};
 use views::{
+    board_picker::{self, BoardPickerState},
     create_ticket::{self, CreateState},
     filter_panel::{self, FilterPanelResult, FilterPanelState},
     help,
@@ -26,6 +27,7 @@ use views::{
     templates_panel::{self, TemplatesPanelResult, TemplatesPanelState},
     ticket_detail::{self, BranchPickState, DetailState},
     ticket_list,
+    template_editor::{self, TemplateEditorState},
     ticket_search::{self, TicketSearchState},
     transition_picker::{self, TransitionState},
 };
@@ -55,6 +57,8 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
         app.config.project.as_deref().or(app.filter.project.as_deref()),
         AppView::TicketList,
     );
+    let mut board_picker_state = BoardPickerState::new(AppView::TicketList);
+    let mut template_editor_state = TemplateEditorState::new(&app, None);
 
     app.trigger_load();
 
@@ -67,6 +71,17 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                 if let Some(name) = user.name {
                     let _ = tx.send(AppEvent::UserLoaded(name)).await;
                 }
+            }
+        });
+    }
+
+    // Resolve the display name of the previously picked board, if any.
+    if let Some(board_id) = app.config.defaults.board_id {
+        let client = app.client.clone();
+        let tx = app.event_tx.clone();
+        tokio::spawn(async move {
+            if let Ok(board) = client.get_board(board_id).await {
+                let _ = tx.send(AppEvent::CurrentBoardResolved(board)).await;
             }
         });
     }
@@ -101,6 +116,9 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                     ticket_list::draw(&mut app, frame, content_area);
                     templates_panel::draw(&app, &templates_panel_state, frame, content_area);
                 }
+                AppView::TemplateEditor => {
+                    template_editor::draw(&app, &mut template_editor_state, frame, content_area);
+                }
                 AppView::TransitionPicker { .. } => {
                     let from_list = transition_state.return_to_list;
                     if from_list {
@@ -116,6 +134,14 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         _ => ticket_list::draw(&mut app, frame, content_area),
                     }
                     ticket_search::draw(&ticket_search_state, frame, content_area);
+                }
+                AppView::BoardPicker => {
+                    match &board_picker_state.prev_view {
+                        AppView::TicketDetail { .. } => ticket_detail::draw(&app, &mut detail_state, frame, content_area),
+                        AppView::Settings => settings::draw(&app, &mut settings_state, frame, content_area),
+                        _ => ticket_list::draw(&mut app, frame, content_area),
+                    }
+                    board_picker::draw(&app, &board_picker_state, frame, content_area);
                 }
             }
 
@@ -166,6 +192,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                 if app.error.is_some() {
                     create_state.loading = false;
                     ticket_search_state.loading = false;
+                    template_editor_state.saving = false;
                 }
             }
             poll_result = tokio::task::spawn_blocking(|| event::poll(std::time::Duration::from_millis(50))) => {
@@ -239,6 +266,23 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         let project = app.config.project.as_deref().or(app.filter.project.as_deref());
                         ticket_search_state = TicketSearchState::new(project, prev);
                         app.view = AppView::TicketSearch;
+                        continue;
+                    }
+
+                    if key.code == KeyCode::Char('b') && key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !matches!(app.view, AppView::BoardPicker)
+                    {
+                        let prev = app.view.clone();
+                        board_picker_state = BoardPickerState::new(prev);
+                        app.view = AppView::BoardPicker;
+                        let client = app.client.clone();
+                        let tx = app.event_tx.clone();
+                        tokio::spawn(async move {
+                            match client.get_boards().await {
+                                Ok(boards) => { let _ = tx.send(AppEvent::BoardsLoaded(boards)).await; }
+                                Err(e) => { let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await; }
+                            }
+                        });
                         continue;
                     }
 
@@ -483,12 +527,19 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 open_in_nvim(config_dir().join("templates.yaml"));
                                 terminal.clear().ok();
                             } else {
-                                let len = app.templates.len();
-                                match templates_panel::handle_key(&mut templates_panel_state, len, key) {
+                                match templates_panel::handle_key(&mut app, &mut templates_panel_state, key) {
                                     Some(TemplatesPanelResult::Selected(idx)) => {
                                         create_state = CreateState::new();
                                         create_state.template_idx = idx;
                                         app.view = AppView::CreateTicket;
+                                    }
+                                    Some(TemplatesPanelResult::Edit(idx)) => {
+                                        template_editor_state = TemplateEditorState::new(&app, Some(idx));
+                                        app.view = AppView::TemplateEditor;
+                                    }
+                                    Some(TemplatesPanelResult::New) => {
+                                        template_editor_state = TemplateEditorState::new(&app, None);
+                                        app.view = AppView::TemplateEditor;
                                     }
                                     Some(TemplatesPanelResult::Cancel) => {
                                         app.view = AppView::TicketList;
@@ -499,6 +550,12 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         }
                         AppView::TicketSearch => {
                             ticket_search::handle_key(&mut app, &mut ticket_search_state, key);
+                        }
+                        AppView::BoardPicker => {
+                            board_picker::handle_key(&mut app, &mut board_picker_state, key);
+                        }
+                        AppView::TemplateEditor => {
+                            template_editor::handle_key(&mut app, &mut template_editor_state, key);
                         }
                         AppView::FilterPanel => {
                             match filter_panel::handle_key(&mut app, &mut filter_panel_state, key) {

@@ -1,4 +1,6 @@
+pub mod board_picker;
 pub mod create_ticket;
+pub mod template_editor;
 pub mod filter_panel;
 pub mod help;
 pub mod settings;

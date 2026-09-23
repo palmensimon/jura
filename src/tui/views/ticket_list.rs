@@ -205,6 +205,11 @@ fn draw_header(app: &App, frame: &mut Frame, area: Rect) {
         };
         title_spans.push(Span::styled(tab.label(), style));
     }
+    if let Some(board) = &app.current_board {
+        title_spans.push(Span::styled("  │ ", Style::default().fg(Color::DarkGray)));
+        title_spans.push(Span::styled("board: ", Style::default().fg(Color::DarkGray)));
+        title_spans.push(Span::styled(board.name.as_str(), Style::default().fg(Color::Magenta)));
+    }
     frame.render_widget(Paragraph::new(Line::from(title_spans)), chunks[0]);
 
     if right_width > 0 {

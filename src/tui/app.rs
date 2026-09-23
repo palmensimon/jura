@@ -3,7 +3,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     config::{Config, TicketTemplate},
-    jira::{Issue, JiraClient, Transition},
+    jira::{Board, Issue, JiraClient, Transition},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -134,6 +134,8 @@ pub enum AppView {
     Settings,
     FilterPanel,
     TicketSearch,
+    BoardPicker,
+    TemplateEditor,
 }
 
 #[derive(Debug, Clone)]
@@ -150,6 +152,11 @@ pub enum AppEvent {
     UserLoaded(String),
     AssignmentChanged(Issue),
     TicketFound(Issue),
+    BoardsLoaded(Vec<Board>),
+    BoardChanged(Config, Option<Board>),
+    CurrentBoardResolved(Board),
+    TemplatesSaved(Vec<TicketTemplate>),
+    FieldSuggestionsLoaded(u64, Result<Vec<(String, String)>, String>),
     Error(String),
 }
 
@@ -307,6 +314,11 @@ pub struct App {
     pub hidden_status_options: Vec<String>,
     pub available_components: Vec<String>,
     pub available_transitions: Vec<Transition>,
+    pub available_boards: Vec<Board>,
+    pub current_board: Option<Board>,
+    pub field_picker_items: Vec<(String, String)>,
+    pub field_picker_loading: bool,
+    pub field_picker_seq: u64,
     pub show_help: bool,
     pub help_scroll: u16,
 }
@@ -343,6 +355,11 @@ impl App {
             hidden_status_options: vec![],
             available_components: vec![],
             available_transitions: vec![],
+            available_boards: vec![],
+            current_board: None,
+            field_picker_items: vec![],
+            field_picker_loading: false,
+            field_picker_seq: 0,
             show_help: false,
             help_scroll: 0,
         }
@@ -469,6 +486,36 @@ impl App {
             }
             AppEvent::TicketFound(issue) => {
                 self.view = AppView::TicketDetail { issue: Box::new(issue) };
+            }
+            AppEvent::BoardsLoaded(boards) => {
+                self.available_boards = boards;
+            }
+            AppEvent::BoardChanged(new_cfg, board) => {
+                self.config = Arc::new(new_cfg);
+                self.status_msg = Some(match &board {
+                    Some(b) => format!("Board set to {}", b.name),
+                    None => "Board cleared".to_string(),
+                });
+                self.current_board = board;
+            }
+            AppEvent::CurrentBoardResolved(board) => {
+                self.current_board = Some(board);
+            }
+            AppEvent::TemplatesSaved(new_templates) => {
+                self.templates = new_templates;
+                if matches!(self.view, AppView::TemplateEditor) {
+                    self.view = AppView::TemplatesPanel;
+                }
+                self.status_msg = Some("Templates saved".to_string());
+            }
+            AppEvent::FieldSuggestionsLoaded(seq, result) => {
+                if seq == self.field_picker_seq {
+                    self.field_picker_loading = false;
+                    match result {
+                        Ok(items) => self.field_picker_items = items,
+                        Err(e) => self.error = Some(e),
+                    }
+                }
             }
             AppEvent::Error(e) => {
                 self.error = Some(e);

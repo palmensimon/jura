@@ -232,6 +232,58 @@ impl JiraClient {
         self.assign_issue_to_sprint(sprint_id, issue_key).await
     }
 
+    /// Lists all Jira boards visible to the current user (paginated).
+    pub async fn get_boards(&self) -> Result<Vec<Board>> {
+        let url = format!("{}/rest/agile/1.0/board", self.base_url);
+        let mut boards = Vec::new();
+        let mut start_at = 0u32;
+        loop {
+            let resp = self
+                .client
+                .get(&url)
+                .query(&[("startAt", start_at.to_string()), ("maxResults", "50".to_string())])
+                .send()
+                .await
+                .context("Failed to fetch boards")?;
+
+            let status = resp.status();
+            if !status.is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("Jira get boards returned {status}: {body}");
+            }
+
+            let page: BoardList = resp.json().await.context("Failed to parse boards response")?;
+            let is_last = page.is_last || page.values.is_empty();
+            boards.extend(page.values);
+            if is_last || boards.len() >= 1000 {
+                break;
+            }
+            start_at += 50;
+        }
+        boards.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        Ok(boards)
+    }
+
+    /// Fetches a single board by id — used to resolve the display name of a previously
+    /// picked board without paging through the whole list.
+    pub async fn get_board(&self, board_id: u64) -> Result<Board> {
+        let url = format!("{}/rest/agile/1.0/board/{board_id}", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to fetch board {board_id}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get board returned {status}: {body}");
+        }
+
+        resp.json::<Board>().await.context("Failed to parse board response")
+    }
+
     pub async fn get_project_components(&self, project_key: &str) -> Result<Vec<ProjectComponent>> {
         let url = format!("{}/rest/api/2/project/{project_key}/components", self.base_url);
         let resp = self
@@ -251,4 +303,107 @@ impl JiraClient {
             .await
             .context("Failed to parse components response")
     }
+
+    /// Global list of issue priorities configured on this Jira instance (not project-scoped).
+    pub async fn get_priorities(&self) -> Result<Vec<Priority>> {
+        let url = format!("{}/rest/api/2/priority", self.base_url);
+        let resp = self.client.get(&url).send().await.context("Failed to get priorities")?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get priorities returned {status}: {body}");
+        }
+
+        resp.json::<Vec<Priority>>().await.context("Failed to parse priorities response")
+    }
+
+    /// Issue types creatable for a project (Jira 8.4+ granular createmeta endpoint).
+    pub async fn get_issue_types(&self, project_key: &str) -> Result<Vec<IssueType>> {
+        let url = format!("{}/rest/api/2/issue/createmeta/{project_key}/issuetypes", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to get issue types for {project_key}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get issue types returned {status}: {body}");
+        }
+
+        let list: IssueTypeList = resp.json().await.context("Failed to parse issue types response")?;
+        Ok(list.values)
+    }
+
+    /// Fix versions (releases) configured for a project.
+    pub async fn get_project_versions(&self, project_key: &str) -> Result<Vec<FixVersion>> {
+        let url = format!("{}/rest/api/2/project/{project_key}/versions", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to get versions for {project_key}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get versions returned {status}: {body}");
+        }
+
+        resp.json::<Vec<FixVersion>>().await.context("Failed to parse versions response")
+    }
+
+    /// Jira's JQL-bar autocomplete suggestions for a given field name (e.g. "Team").
+    /// `query` may be empty to fetch the field's default suggestion list.
+    pub async fn search_field_suggestions(&self, field_name: &str, query: &str) -> Result<Vec<FieldSuggestion>> {
+        let url = format!("{}/rest/api/2/jql/autocompletedata/suggestions", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("fieldName", field_name), ("fieldValue", query)])
+            .send()
+            .await
+            .with_context(|| format!("Failed to get suggestions for {field_name}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get suggestions returned {status}: {body}");
+        }
+
+        let list: FieldSuggestionList = resp.json().await.context("Failed to parse suggestions response")?;
+        Ok(list
+            .results
+            .into_iter()
+            .map(|r| FieldSuggestion {
+                value: r.value,
+                display_name: clean_suggestion_html(&r.display_name),
+            })
+            .collect())
+    }
+}
+
+/// Strips Jira's `<b>…</b>` highlight markup and unescapes the handful of HTML entities
+/// that show up in JQL-suggestion display names (e.g. `"R&amp;D"` -> `"R&D"`).
+fn clean_suggestion_html(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut in_tag = false;
+    for c in s.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#39;", "'")
 }

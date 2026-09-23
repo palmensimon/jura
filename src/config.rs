@@ -6,8 +6,6 @@ use std::path::PathBuf;
 pub struct Config {
     pub jira: JiraConfig,
     #[serde(default)]
-    pub board_id: Option<u64>,
-    #[serde(default)]
     pub project: Option<String>,
     #[serde(default)]
     pub defaults: Defaults,
@@ -27,6 +25,10 @@ pub struct Defaults {
     pub assign_on_checkout: bool,
     #[serde(default)]
     pub browser: Option<String>,
+    /// Active board (for sprint queries). Managed via the Ctrl+B board picker in the TUI —
+    /// not meant to be hand-edited. Defaults to the last board picked. `None` = no board selected.
+    #[serde(default)]
+    pub board_id: Option<u64>,
     /// Statuses excluded from results when no explicit status filter is active (empty = hide nothing)
     #[serde(default = "default_hidden_statuses")]
     pub hidden_statuses: Vec<String>,
@@ -90,7 +92,7 @@ pub struct DefaultFilter {
     pub sort_dir: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Templates {
     #[serde(default)]
     pub templates: Vec<TicketTemplate>,
@@ -147,6 +149,22 @@ pub fn load_config() -> Result<Config> {
         config.defaults = sf.defaults;
     }
 
+    // Backward compat: `board_id` used to live at the top level of config.yaml. It's now
+    // a Ctrl+B-managed preference in user_settings.yaml — migrate it over once, silently.
+    if config.defaults.board_id.is_none() {
+        #[derive(Deserialize)]
+        struct LegacyBoardId {
+            #[serde(default)]
+            board_id: Option<u64>,
+        }
+        if let Ok(legacy) = serde_yaml::from_str::<LegacyBoardId>(&content) {
+            if let Some(id) = legacy.board_id {
+                config.defaults.board_id = Some(id);
+                let _ = save_settings(&config.defaults);
+            }
+        }
+    }
+
     Ok(config)
 }
 
@@ -165,14 +183,12 @@ pub fn save_config(config: &Config) -> Result<()> {
     struct CredFile<'a> {
         jira: &'a JiraConfig,
         #[serde(skip_serializing_if = "Option::is_none")]
-        board_id: Option<u64>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         project: Option<String>,
     }
     let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
     let path = dir.join("config.yaml");
-    let yaml = serde_yaml::to_string(&CredFile { jira: &config.jira, board_id: config.board_id, project: config.project.clone() })
+    let yaml = serde_yaml::to_string(&CredFile { jira: &config.jira, project: config.project.clone() })
         .context("Failed to serialize config")?;
     std::fs::write(&path, yaml)
         .with_context(|| format!("Failed to write config to {}", path.display()))
@@ -197,6 +213,29 @@ pub fn load_templates() -> Result<Templates> {
     serde_yaml::from_str(&content).context("Failed to parse templates.yaml")
 }
 
+/// Persist the full template list to `templates.yaml`, replacing its contents.
+///
+/// This is a full-file rewrite via serde_yaml, which strips any hand-written `#` comment
+/// annotations and normalizes the legacy `epic:` key to `epic_link:` (harmless —
+/// `TicketTemplate::epic_link` has `#[serde(alias = "epic")]`, so both keys still read back
+/// identically). Accepted trade-off: the in-TUI editor replaces hand-editing, and there's no
+/// mature comment-preserving YAML writer worth a new dependency for this. As a safety net, the
+/// first structured save takes a one-time snapshot to `templates.yaml.bak` if one doesn't
+/// already exist, so nothing is permanently unrecoverable.
+pub fn save_templates(templates: &[TicketTemplate]) -> Result<()> {
+    let dir = config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join("templates.yaml");
+    let backup_path = dir.join("templates.yaml.bak");
+    if path.exists() && !backup_path.exists() {
+        let _ = std::fs::copy(&path, &backup_path);
+    }
+    let file = Templates { templates: templates.to_vec() };
+    let yaml = serde_yaml::to_string(&file).context("Failed to serialize templates")?;
+    std::fs::write(&path, yaml)
+        .with_context(|| format!("Failed to write templates to {}", path.display()))
+}
+
 pub fn write_example_config() -> Result<()> {
     let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
@@ -214,8 +253,8 @@ pub fn write_example_config() -> Result<()> {
 # Optional: default Jira project key (e.g. "PROJ")
 # project: "PROJ"
 
-# Optional: board ID used for sprint queries (found in the board URL: ?rapidView=<id>)
-# board_id: 42
+# The active board (used for sprint queries) is not configured here — press Ctrl+B in
+# the TUI to pick a board. The choice is remembered in user_settings.yaml.
 "#,
         )?;
     }
@@ -230,6 +269,10 @@ pub fn write_example_config() -> Result<()> {
 
   # Automatically assign yourself when checking out a branch
   assign_on_checkout: false
+
+  # Active board id, used for sprint queries. Managed automatically by the Ctrl+B
+  # board picker in the TUI (remembers the last board you selected) — no need to set by hand.
+  # board_id: ~
 
   # Statuses hidden from results when no explicit status filter is active (empty = hide nothing)
   # These also appear as toggleable options in the filter panel [3] Hidden statuses row.

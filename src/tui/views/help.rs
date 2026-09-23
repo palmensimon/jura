@@ -25,6 +25,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
                 ("q  Ctrl+C", "Quit"),
                 ("?", "Toggle help"),
                 ("Ctrl+K", "Go to ticket by key"),
+                ("Ctrl+B", "Switch board"),
             ],
         ),
         (
@@ -76,12 +77,42 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
             ],
         ),
         (
+            "Board Picker",
+            &[
+                ("type", "Filter boards"),
+                ("Enter", "Select  (remembered as default)"),
+                ("Esc  ⌫", "Cancel"),
+            ],
+        ),
+        (
             "Select Template",
             &[
                 ("↑/↓  j/k", "Navigate"),
-                ("Enter", "Select"),
+                ("Enter", "Use template to create ticket"),
+                ("a", "Add new template"),
+                ("e", "Edit template"),
+                ("d", "Duplicate template"),
+                ("x", "Delete template  (confirm y/n)"),
                 ("r", "Reload templates"),
-                ("Ctrl+T", "Edit templates.yaml"),
+                ("Ctrl+T", "Edit templates.yaml (raw)"),
+            ],
+        ),
+        (
+            "Template Editor",
+            &[
+                ("Tab / ↑↓", "Navigate fields"),
+                ("Space", "Edit text field"),
+                ("Enter", "Open field picker  (component/epic/team/…)"),
+                ("Ctrl+S", "Save"),
+                ("Esc", "Cancel"),
+            ],
+        ),
+        (
+            "Field Picker",
+            &[
+                ("type", "Filter / search"),
+                ("Enter", "Select"),
+                ("Esc  ⌫", "Cancel"),
             ],
         ),
         (
@@ -249,6 +280,17 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
         ],
         AppView::TicketSearch => &[
             ("↵", "open ticket"),
+            ("Esc", "cancel"),
+        ],
+        AppView::BoardPicker => &[
+            ("type", "filter"),
+            ("↵", "select"),
+            ("Esc", "cancel"),
+        ],
+        AppView::TemplateEditor => &[
+            ("Tab", "next field"),
+            ("Enter", "edit / open picker"),
+            ("Ctrl+S", "save"),
             ("Esc", "cancel"),
         ],
     }

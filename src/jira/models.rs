@@ -283,3 +283,46 @@ pub struct Sprint {
 pub struct SprintList {
     pub values: Vec<Sprint>,
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Board {
+    pub id: u64,
+    pub name: String,
+    #[serde(rename = "type", default)]
+    pub board_type: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BoardList {
+    #[serde(default)]
+    pub values: Vec<Board>,
+    #[serde(rename = "isLast", default)]
+    pub is_last: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IssueTypeList {
+    #[serde(default)]
+    pub values: Vec<IssueType>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawFieldSuggestion {
+    pub value: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FieldSuggestionList {
+    #[serde(default)]
+    pub results: Vec<RawFieldSuggestion>,
+}
+
+/// Cleaned suggestion (highlight markup stripped, HTML entities unescaped) —
+/// constructed by `JiraClient::search_field_suggestions`, never deserialized directly.
+#[derive(Debug, Clone)]
+pub struct FieldSuggestion {
+    pub value: String,
+    pub display_name: String,
+}

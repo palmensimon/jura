@@ -4,10 +4,11 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, Paragraph},
 };
 use tui_textarea::TextArea;
 
+use super::search_picker::{self, SearchPickerAction, SearchPickerState};
 use crate::{
     config::{TicketTemplate, save_templates},
     tui::app::{App, AppEvent, AppView},
@@ -138,8 +139,7 @@ fn has_clear_row(field: TemplateField) -> bool {
 
 pub struct FieldPickerState {
     pub field: TemplateField,
-    pub search: String,
-    pub selected: usize,
+    pub picker: SearchPickerState,
 }
 
 pub struct TemplateEditorState {
@@ -195,6 +195,13 @@ impl TemplateEditorState {
         };
         state.refresh_styles();
         state
+    }
+
+    /// True while a keystroke would go into a text field or a field-picker's search box,
+    /// rather than being interpreted as a navigation/action shortcut — used to suppress the
+    /// global `?`-help-toggle so a literal `?` can still be typed.
+    pub fn is_capturing_text(&self) -> bool {
+        self.editing_text || self.field_picker.is_some()
     }
 
     fn text_area_mut(&mut self, field: TemplateEditorField) -> &mut TextArea<'static> {
@@ -254,12 +261,20 @@ pub fn handle_key(app: &mut App, state: &mut TemplateEditorState, key: KeyEvent)
         KeyCode::Esc => {
             app.view = AppView::TemplatesPanel;
         }
-        KeyCode::Tab | KeyCode::Down => {
+        KeyCode::Tab | KeyCode::Down | KeyCode::Char('j') => {
             state.active = TemplateEditorField::from_index(state.active.index() + 1);
             state.refresh_styles();
         }
-        KeyCode::BackTab | KeyCode::Up => {
+        KeyCode::BackTab | KeyCode::Up | KeyCode::Char('k') => {
             state.active = TemplateEditorField::from_index(state.active.index() + FIELD_COUNT - 1);
+            state.refresh_styles();
+        }
+        KeyCode::Char(c @ '1'..='9') => {
+            state.active = TemplateEditorField::from_index(c as usize - '1' as usize);
+            state.refresh_styles();
+        }
+        KeyCode::Char('0') => {
+            state.active = TemplateEditorField::from_index(9);
             state.refresh_styles();
         }
         KeyCode::Char(' ') => {
@@ -286,7 +301,7 @@ fn open_picker(app: &mut App, state: &mut TemplateEditorState, field: TemplateFi
         return;
     }
     app.error = None;
-    state.field_picker = Some(FieldPickerState { field, search: String::new(), selected: 0 });
+    state.field_picker = Some(FieldPickerState { field, picker: SearchPickerState::new() });
 
     if field == TemplateField::EpicLink {
         // Don't hit the server for an unscoped epic search — wait for at least one character.
@@ -298,80 +313,33 @@ fn open_picker(app: &mut App, state: &mut TemplateEditorState, field: TemplateFi
 }
 
 fn handle_field_picker_key(app: &mut App, state: &mut TemplateEditorState, key: KeyEvent) {
-    let Some(picker) = state.field_picker.as_mut() else { return };
-    let field = picker.field;
+    let Some(fp) = state.field_picker.as_mut() else { return };
+    let field = fp.field;
+    let live = field.is_live();
+    let show_clear_row = has_clear_row(field);
 
-    match key.code {
-        KeyCode::Esc => {
+    let action = search_picker::handle_key(&mut fp.picker, key, &app.field_picker_items, live, show_clear_row);
+
+    match action {
+        SearchPickerAction::None => {}
+        SearchPickerAction::Cancel => {
             state.field_picker = None;
         }
-        KeyCode::Backspace => {
-            if picker.search.is_empty() {
-                state.field_picker = None;
-            } else {
-                picker.search.pop();
-                picker.selected = 0;
-                let query = picker.search.clone();
-                if field.is_live() {
-                    if field == TemplateField::EpicLink && query.is_empty() {
-                        app.field_picker_items.clear();
-                        app.field_picker_loading = false;
-                    } else {
-                        spawn_query(app, field, state.draft.project.clone(), query);
-                    }
-                }
-            }
-        }
-        KeyCode::Up => {
-            if let Some(picker) = state.field_picker.as_mut() {
-                if picker.selected > 0 {
-                    picker.selected -= 1;
-                }
-            }
-        }
-        KeyCode::Down => {
-            let total = {
-                let picker = state.field_picker.as_ref().unwrap();
-                let offset = if has_clear_row(picker.field) { 1 } else { 0 };
-                offset + visible_items(app, picker).len()
-            };
-            if let Some(picker) = state.field_picker.as_mut() {
-                if picker.selected + 1 < total {
-                    picker.selected += 1;
-                }
-            }
-        }
-        KeyCode::Char(c) => {
-            picker.search.push(c);
-            picker.selected = 0;
-            if field.is_live() {
-                let query = picker.search.clone();
-                spawn_query(app, field, state.draft.project.clone(), query);
-            }
-        }
-        KeyCode::Enter => {
-            let chosen = {
-                let picker = state.field_picker.as_ref().unwrap();
-                let items = visible_items(app, picker);
-                let offset = if has_clear_row(picker.field) { 1 } else { 0 };
-                let total = offset + items.len();
-                if total == 0 {
-                    None
+        SearchPickerAction::Requery => {
+            if live {
+                let query = state.field_picker.as_ref().unwrap().picker.search.clone();
+                if field == TemplateField::EpicLink && query.is_empty() {
+                    app.field_picker_items.clear();
+                    app.field_picker_loading = false;
                 } else {
-                    let idx = picker.selected.min(total - 1);
-                    if has_clear_row(picker.field) && idx == 0 {
-                        Some(None)
-                    } else {
-                        Some(Some(items[idx - offset].0.clone()))
-                    }
+                    spawn_query(app, field, state.draft.project.clone(), query);
                 }
-            };
-            if let Some(value) = chosen {
-                apply_field_value(state, field, value);
-                state.field_picker = None;
             }
         }
-        _ => {}
+        SearchPickerAction::Selected(value) => {
+            apply_field_value(state, field, value);
+            state.field_picker = None;
+        }
     }
 }
 
@@ -384,16 +352,6 @@ fn apply_field_value(state: &mut TemplateEditorState, field: TemplateField, valu
         TemplateField::Priority => state.draft.priority = value,
         TemplateField::FixVersion => state.draft.fix_version = value,
     }
-}
-
-/// Items to show for the currently open picker: server-filtered already for live fields,
-/// filtered locally against `search` for the rest.
-fn visible_items<'a>(app: &'a App, picker: &FieldPickerState) -> Vec<&'a (String, String)> {
-    if picker.field.is_live() || picker.search.is_empty() {
-        return app.field_picker_items.iter().collect();
-    }
-    let q = picker.search.to_lowercase();
-    app.field_picker_items.iter().filter(|(_, label)| label.to_lowercase().contains(&q)).collect()
 }
 
 fn spawn_query(app: &mut App, field: TemplateField, project: String, query: String) {
@@ -432,38 +390,10 @@ fn spawn_query(app: &mut App, field: TemplateField, project: String, query: Stri
                 .await
                 .map(|ss| ss.into_iter().map(|s| (s.value, s.display_name)).collect())
                 .map_err(|e| format!("{e:#}")),
-            TemplateField::EpicLink => {
-                let sanitized = query.replace('"', "");
-                let upper = sanitized.to_uppercase();
-                // Only add a key-equality clause when the query actually looks like a key
-                // (or a fragment we can complete with the project prefix) — Jira's JQL parser
-                // rejects `key = "..."` outright when the value isn't key-shaped, which would
-                // otherwise fail the whole query for a plain-text search like "cost".
-                let key_clause = if upper.contains('-') {
-                    format!(" OR key = \"{upper}\"")
-                } else if !upper.is_empty() && upper.chars().all(|c| c.is_ascii_digit()) {
-                    format!(" OR key = \"{project}-{upper}\"")
-                } else {
-                    String::new()
-                };
-                let jql = format!(
-                    "project = {project} AND issuetype = Epic AND (summary ~ \"{sanitized}*\"{key_clause}) ORDER BY updated DESC"
-                );
-                client
-                    .search_issues(&jql, 25)
-                    .await
-                    .map(|r| {
-                        r.issues
-                            .into_iter()
-                            .map(|i| {
-                                let key = i.key.clone();
-                                let summary = i.summary().to_string();
-                                (key.clone(), format!("{key} — {summary}"))
-                            })
-                            .collect()
-                    })
-                    .map_err(|e| format!("{e:#}"))
-            }
+            TemplateField::EpicLink => client
+                .search_epics(&project, &query, 25)
+                .await
+                .map_err(|e| format!("{e:#}")),
         };
         let _ = tx.send(AppEvent::FieldSuggestionsLoaded(seq, result)).await;
     });
@@ -634,89 +564,16 @@ fn draw_value_row(frame: &mut Frame, area: Rect, field: TemplateEditorField, act
     );
 }
 
-fn draw_field_picker(app: &App, picker: &FieldPickerState, frame: &mut Frame, area: Rect) {
-    let popup_w = (area.width * 60 / 100).max(50).min(area.width);
-    let items = visible_items(app, picker);
-    let offset = if has_clear_row(picker.field) { 1 } else { 0 };
-    let awaiting_epic_input = picker.field == TemplateField::EpicLink && picker.search.is_empty();
-    let list_rows: u16 = if app.field_picker_loading || awaiting_epic_input {
-        1
-    } else {
-        (offset + items.len()).max(1).min(14) as u16
+fn draw_field_picker(app: &App, fp: &FieldPickerState, frame: &mut Frame, area: Rect) {
+    let awaiting_epic_input = fp.field == TemplateField::EpicLink && fp.picker.search.is_empty();
+    let opts = search_picker::DrawOptions {
+        title: fp.field.label(),
+        live: fp.field.is_live(),
+        show_clear_row: has_clear_row(fp.field),
+        loading: app.field_picker_loading,
+        awaiting_input: awaiting_epic_input.then_some("Type at least 1 character to search epics…"),
     };
-    let popup_h = (list_rows + 4).min(area.height.saturating_sub(4)).max(7);
-    let x = area.x + area.width.saturating_sub(popup_w) / 2;
-    let y = area.y + area.height.saturating_sub(popup_h) / 2;
-    let popup = Rect::new(x, y, popup_w, popup_h);
-
-    frame.render_widget(Clear, popup);
-    let outer = Block::default()
-        .borders(Borders::ALL)
-        .title(format!(" {} ", picker.field.label()))
-        .border_style(Style::default().fg(Color::Cyan));
-    let inner = outer.inner(popup);
-    frame.render_widget(outer, popup);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Min(0)])
-        .split(inner);
-
-    let placeholder = if picker.field.is_live() { "type to search…" } else { "type to filter…" };
-    let search_line = if picker.search.is_empty() {
-        Line::from(vec![
-            Span::styled("/", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!(" {placeholder}"), Style::default().fg(Color::DarkGray)),
-        ])
-    } else {
-        Line::from(vec![
-            Span::styled("/", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled(picker.search.clone(), Style::default().fg(Color::White)),
-            Span::styled("█", Style::default().fg(Color::Yellow)),
-        ])
-    };
-    frame.render_widget(
-        Paragraph::new(search_line).block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(Color::DarkGray))),
-        chunks[0],
-    );
-
-    if awaiting_epic_input {
-        frame.render_widget(
-            Paragraph::new(Span::styled(" Type at least 1 character to search epics…", Style::default().fg(Color::DarkGray))),
-            chunks[1],
-        );
-        return;
-    }
-
-    if app.field_picker_loading {
-        frame.render_widget(Paragraph::new(Span::styled(" Loading…", Style::default().fg(Color::DarkGray))), chunks[1]);
-        return;
-    }
-
-    let mut list_items: Vec<ListItem> = vec![];
-    if has_clear_row(picker.field) {
-        list_items.push(ListItem::new(Line::from(Span::styled("— Clear —", Style::default().fg(Color::DarkGray)))));
-    }
-    list_items.extend(
-        items
-            .iter()
-            .map(|(_, label)| ListItem::new(Line::from(Span::styled(label.as_str(), Style::default().fg(Color::White))))),
-    );
-
-    if list_items.is_empty() {
-        frame.render_widget(Paragraph::new(Span::styled(" No matches", Style::default().fg(Color::DarkGray))), chunks[1]);
-        return;
-    }
-
-    let total = list_items.len();
-    let list = List::new(list_items)
-        .block(Block::default().borders(Borders::NONE))
-        .highlight_style(Style::default().bg(Color::Rgb(40, 40, 60)).add_modifier(Modifier::BOLD))
-        .highlight_symbol("▶ ");
-
-    let selected = picker.selected.min(total.saturating_sub(1));
-    let mut list_state = ListState::default().with_selected(Some(selected));
-    frame.render_stateful_widget(list, chunks[1], &mut list_state);
+    search_picker::draw(&app.field_picker_items, &fp.picker, &opts, frame, area);
 }
 
 fn single_line_area(value: &str) -> TextArea<'static> {

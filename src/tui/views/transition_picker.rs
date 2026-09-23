@@ -157,7 +157,7 @@ pub fn draw(app: &App, state: &mut TransitionState, frame: &mut Frame, area: Rec
     } else {
         filtered.len().min(14) as u16
     };
-    let popup_h = (list_rows + 4).min(area.height.saturating_sub(4)).max(7);
+    let popup_h = (list_rows + 5).min(area.height.saturating_sub(4)).max(8);
     let popup_w = (area.width * 70 / 100).max(60).min(area.width);
     let x = area.x + area.width.saturating_sub(popup_w) / 2;
     let y = area.y + area.height.saturating_sub(popup_h) / 2;
@@ -177,8 +177,10 @@ pub fn draw(app: &App, state: &mut TransitionState, frame: &mut Frame, area: Rec
         .constraints([
             Constraint::Length(2), // search line + bottom border
             Constraint::Min(0),    // results
+            Constraint::Length(1), // hint footer
         ])
         .split(inner);
+    let footer = Paragraph::new(Span::styled(" [↵] apply   [Esc] back", Style::default().fg(Color::DarkGray)));
 
     // Search bar
     let search_line = if state.search.is_empty() {
@@ -211,6 +213,7 @@ pub fn draw(app: &App, state: &mut TransitionState, frame: &mut Frame, area: Rec
             )),
             chunks[1],
         );
+        frame.render_widget(footer, chunks[2]);
         return;
     }
 
@@ -222,6 +225,7 @@ pub fn draw(app: &App, state: &mut TransitionState, frame: &mut Frame, area: Rec
             )),
             chunks[1],
         );
+        frame.render_widget(footer, chunks[2]);
         return;
     }
 
@@ -233,6 +237,7 @@ pub fn draw(app: &App, state: &mut TransitionState, frame: &mut Frame, area: Rec
             )),
             chunks[1],
         );
+        frame.render_widget(footer, chunks[2]);
         return;
     }
 
@@ -274,4 +279,5 @@ pub fn draw(app: &App, state: &mut TransitionState, frame: &mut Frame, area: Rec
 
     let mut list_state = ListState::default().with_selected(Some(selected));
     frame.render_stateful_widget(list, chunks[1], &mut list_state);
+    frame.render_widget(footer, chunks[2]);
 }

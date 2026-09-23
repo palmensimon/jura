@@ -8,7 +8,8 @@ use ratatui::{
     crossterm::{
         event::{
             self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste,
-            EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
+            EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
+            MouseEventKind, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
         },
         execute,
         terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -21,6 +22,7 @@ use app::{App, AppEvent, AppView, Tab};
 use views::{
     board_picker::{self, BoardPickerState},
     create_ticket::{self, CreateState},
+    filter_options::{self, FilterOptionsState},
     filter_panel::{self, FilterPanelResult, FilterPanelState},
     help,
     settings::{self, SettingsState},
@@ -42,6 +44,13 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste)?;
+    // Ctrl+Enter only arrives as distinct from plain Enter on terminals that support the Kitty
+    // keyboard protocol (and, inside tmux, only with `set -g extended-keys on`) — this degrades
+    // silently to a no-op everywhere else, which is why Ctrl+O also opens the browser.
+    let keyboard_enhancement = ratatui::crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
+    if keyboard_enhancement {
+        execute!(stdout, PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)).ok();
+    }
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -59,6 +68,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
     );
     let mut board_picker_state = BoardPickerState::new(AppView::TicketList);
     let mut template_editor_state = TemplateEditorState::new(&app, None);
+    let mut filter_options_state = FilterOptionsState::new(&app);
 
     app.trigger_load();
 
@@ -119,6 +129,9 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                 AppView::TemplateEditor => {
                     template_editor::draw(&app, &mut template_editor_state, frame, content_area);
                 }
+                AppView::FilterOptionsEditor => {
+                    filter_options::draw(&app, &filter_options_state, frame, content_area);
+                }
                 AppView::TransitionPicker { .. } => {
                     let from_list = transition_state.return_to_list;
                     if from_list {
@@ -145,13 +158,32 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                 }
             }
 
-            // Global bottom status bar
+            // Global bottom status bar. For a popup rendered on top of another view, the bar
+            // keeps showing whatever that background view would show — the popup's own hints
+            // live inside its own box instead (see each view's draw()).
             if matches!(app.view, AppView::TicketList) && detail_state.is_picking() {
                 ticket_detail::draw_bar(&app, &detail_state, frame, bar_area);
-            } else if matches!(app.view, AppView::TicketList) {
+            } else if matches!(app.view, AppView::TicketList | AppView::FilterPanel | AppView::TemplatesPanel) {
                 ticket_list::draw_bar(&app, frame, bar_area);
             } else if matches!(app.view, AppView::TicketDetail { .. }) {
                 ticket_detail::draw_bar(&app, &detail_state, frame, bar_area);
+            } else if matches!(app.view, AppView::TransitionPicker { .. }) {
+                if transition_state.return_to_list {
+                    ticket_list::draw_bar(&app, frame, bar_area);
+                } else {
+                    ticket_detail::draw_bar(&app, &detail_state, frame, bar_area);
+                }
+            } else if matches!(app.view, AppView::TicketSearch) {
+                match &ticket_search_state.prev_view {
+                    AppView::TicketDetail { .. } => ticket_detail::draw_bar(&app, &detail_state, frame, bar_area),
+                    _ => ticket_list::draw_bar(&app, frame, bar_area),
+                }
+            } else if matches!(app.view, AppView::BoardPicker) {
+                match &board_picker_state.prev_view {
+                    AppView::TicketDetail { .. } => ticket_detail::draw_bar(&app, &detail_state, frame, bar_area),
+                    AppView::Settings => help::draw_status_bar(frame, bar_area, help::status_bar_hints(&AppView::Settings), app.all.loading || app.mine.loading, app.status_msg.as_deref()),
+                    _ => ticket_list::draw_bar(&app, frame, bar_area),
+                }
             } else {
                 help::draw_status_bar(frame, bar_area, help::status_bar_hints(&app.view), app.all.loading || app.mine.loading, app.status_msg.as_deref());
             }
@@ -193,6 +225,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                     create_state.loading = false;
                     ticket_search_state.loading = false;
                     template_editor_state.saving = false;
+                    filter_options_state.saving = false;
                 }
             }
             poll_result = tokio::task::spawn_blocking(|| event::poll(std::time::Duration::from_millis(50))) => {
@@ -228,9 +261,18 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         continue;
                     }
                     Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
-                    // Global: ? toggles help (suppress in text-input views)
+                    // Global: ? toggles help (suppressed anywhere a keystroke would instead be
+                    // captured as literal text — every live text field and search box).
                     let in_text_input = matches!(app.view, AppView::CreateTicket)
-                        || (matches!(app.view, AppView::Settings) && settings_state.is_editing());
+                        || (matches!(app.view, AppView::Settings) && settings_state.is_editing())
+                        || matches!(app.view, AppView::BoardPicker)
+                        || matches!(app.view, AppView::TicketSearch)
+                        || matches!(app.view, AppView::TransitionPicker { .. })
+                        || (matches!(app.view, AppView::TemplateEditor) && template_editor_state.is_capturing_text())
+                        || (matches!(app.view, AppView::FilterPanel) && filter_panel_state.text_editing)
+                        || (matches!(app.view, AppView::FilterOptionsEditor) && filter_options_state.is_capturing_text())
+                        || matches!(detail_state.branch_pick, BranchPickState::Editing { .. } | BranchPickState::SelectingBase { .. })
+                        || (matches!(app.view, AppView::TicketList) && app.active_tab().local_search_active);
                     if key.code == KeyCode::Char('?') && !in_text_input {
                         app.show_help = !app.show_help;
                         if app.show_help { app.help_scroll = 0; }
@@ -269,23 +311,6 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         continue;
                     }
 
-                    if key.code == KeyCode::Char('b') && key.modifiers.contains(KeyModifiers::CONTROL)
-                        && !matches!(app.view, AppView::BoardPicker)
-                    {
-                        let prev = app.view.clone();
-                        board_picker_state = BoardPickerState::new(prev);
-                        app.view = AppView::BoardPicker;
-                        let client = app.client.clone();
-                        let tx = app.event_tx.clone();
-                        tokio::spawn(async move {
-                            match client.get_boards().await {
-                                Ok(boards) => { let _ = tx.send(AppEvent::BoardsLoaded(boards)).await; }
-                                Err(e) => { let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await; }
-                            }
-                        });
-                        continue;
-                    }
-
                     if key.code == KeyCode::Char('q') {
                         if matches!(app.view, AppView::TicketList) && !app.active_tab().local_search_active {
                             break;
@@ -314,10 +339,10 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 ticket_detail::handle_branch_picker_key(&mut app, &mut detail_state, key);
                             } else if matches!(detail_state.branch_pick, BranchPickState::SelectingBase { .. }) {
                                 ticket_detail::handle_base_picker_key(&mut app, &mut detail_state, key);
-                            } else if key.code == KeyCode::Char('s') && !app.active_tab().local_search_active {
+                            } else if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
                                 settings_state = SettingsState::new(&app.config);
                                 app.view = AppView::Settings;
-                            } else if key.code == KeyCode::Char('t') && !app.active_tab().local_search_active {
+                            } else if key.code == KeyCode::Char('S') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
                                     let key_str = issue.key.clone();
                                     if let Some(cached) = crate::cache::storage::load_transition_cache(&key_str) {
@@ -355,11 +380,26 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 if let Some(issue) = app.selected_issue().cloned() {
                                     app.toggle_assignment(&issue);
                                 }
-                            } else if key.code == KeyCode::Char('b') && !app.active_tab().local_search_active {
+                            } else if (key.code == KeyCode::Enter || key.code == KeyCode::Char('o'))
+                                && key.modifiers.contains(KeyModifiers::CONTROL)
+                                && !app.active_tab().local_search_active
+                            {
                                 if let Some(issue) = app.selected_issue() {
                                     let url = format!("{}/browse/{}", app.config.jira.base_url, issue.key);
                                     let _ = open_url(&url, app.config.defaults.browser.as_deref());
                                 }
+                            } else if key.code == KeyCode::Char('b') && !app.active_tab().local_search_active {
+                                let prev = app.view.clone();
+                                board_picker_state = BoardPickerState::new(prev);
+                                app.view = AppView::BoardPicker;
+                                let client = app.client.clone();
+                                let tx = app.event_tx.clone();
+                                tokio::spawn(async move {
+                                    match client.get_boards().await {
+                                        Ok(boards) => { let _ = tx.send(AppEvent::BoardsLoaded(boards)).await; }
+                                        Err(e) => { let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await; }
+                                    }
+                                });
                             } else if key.code == KeyCode::Char('o') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue() {
                                     if app.current_branch_key.as_deref() == Some(issue.key.as_str()) {
@@ -408,7 +448,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             }
                         }
                         AppView::TicketDetail { .. } => {
-                            if key.code == KeyCode::Char('t') && matches!(detail_state.branch_pick, BranchPickState::Idle) {
+                            if key.code == KeyCode::Char('S') && matches!(detail_state.branch_pick, BranchPickState::Idle) {
                                 if let AppView::TicketDetail { issue } = &app.view {
                                     let issue = issue.clone();
                                     let key_str = issue.key.clone();
@@ -602,8 +642,15 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 Some(FilterPanelResult::Cancel) => {
                                     app.view = AppView::TicketList;
                                 }
+                                Some(FilterPanelResult::EditOptions) => {
+                                    filter_options_state = FilterOptionsState::new(&app);
+                                    app.view = AppView::FilterOptionsEditor;
+                                }
                                 None => {}
                             }
+                        }
+                        AppView::FilterOptionsEditor => {
+                            filter_options::handle_key(&mut app, &mut filter_options_state, key);
                         }
                     }
                     if !prev_in_detail && matches!(app.view, AppView::TicketDetail { .. }) {
@@ -616,6 +663,9 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
         }
     }
 
+    if keyboard_enhancement {
+        execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags).ok();
+    }
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture, DisableBracketedPaste)?;
     Ok(())

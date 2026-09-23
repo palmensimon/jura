@@ -64,6 +64,41 @@ impl JiraClient {
         resp.json::<SearchResult>().await.context("Failed to parse search response")
     }
 
+    /// Searches epics in a project by summary/key substring, returning `(key, "{key} — {summary}")`
+    /// pairs ready to display. `query` may be empty to list recent epics.
+    ///
+    /// Never emits a bare `key = "..."` clause unless `query` actually looks key-shaped (contains
+    /// a `-`, or is all digits — completed with `project` as the prefix) — Jira's JQL parser
+    /// rejects `key = "..."` outright for a non-key-shaped value, which would otherwise fail the
+    /// whole query for a plain-text search like "cost".
+    pub async fn search_epics(&self, project: &str, query: &str, max_results: u32) -> Result<Vec<(String, String)>> {
+        let sanitized = query.replace('"', "");
+        let upper = sanitized.to_uppercase();
+        let key_clause = if upper.contains('-') {
+            format!(" OR key = \"{upper}\"")
+        } else if !upper.is_empty() && upper.chars().all(|c| c.is_ascii_digit()) {
+            format!(" OR key = \"{project}-{upper}\"")
+        } else {
+            String::new()
+        };
+        let jql = if sanitized.is_empty() {
+            format!("project = {project} AND issuetype = Epic ORDER BY updated DESC")
+        } else {
+            format!("project = {project} AND issuetype = Epic AND (summary ~ \"{sanitized}*\"{key_clause}) ORDER BY updated DESC")
+        };
+
+        let result = self.search_issues(&jql, max_results).await?;
+        Ok(result
+            .issues
+            .into_iter()
+            .map(|i| {
+                let key = i.key.clone();
+                let summary = i.summary().to_string();
+                (key.clone(), format!("{key} — {summary}"))
+            })
+            .collect())
+    }
+
     /// Like `search_issues`, but scoped to a single board's own issue set (its full backlog +
     /// all sprints, not just the active one) — `jql` further narrows within that scope.
     pub async fn get_board_issues(&self, board_id: u64, jql: &str, max_results: u32) -> Result<SearchResult> {

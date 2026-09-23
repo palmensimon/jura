@@ -25,17 +25,16 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
                 ("q  Ctrl+C", "Quit"),
                 ("?", "Toggle help"),
                 ("Ctrl+K", "Go to ticket by key"),
-                ("Ctrl+B", "Switch board"),
             ],
         ),
         (
             "Ticket actions  (List + Detail)",
             &[
-                ("t", "Change status"),
+                ("S", "Change status"),
                 ("a", "Assign / unassign self"),
                 ("c", "Checkout / create branch"),
                 ("o", "Open PR/MR in browser"),
-                ("b", "Open ticket in browser"),
+                ("Ctrl+Enter  Ctrl+O", "Open ticket in browser"),
                 ("⌫", "Back  (Detail only)"),
             ],
         ),
@@ -55,8 +54,9 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
                 ("[  ]  Tab", "Switch tab"),
                 ("f", "Filter panel"),
                 ("n", "New ticket"),
+                ("b", "Switch board"),
                 ("r", "Refresh"),
-                ("s", "Settings"),
+                ("Ctrl+S", "Settings"),
             ],
         ),
         (
@@ -229,28 +229,38 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
     }
 }
 
+/// Hints for `TicketList`'s own bar — also referenced directly by `ticket_list::draw_bar`
+/// (which always means "ticket list", regardless of what `app.view` happens to be at the
+/// moment it's drawn as a popup's background).
+pub const TICKET_LIST_HINTS: &[(&str, &str)] = &[
+    ("S", "status"),
+    ("c", "checkout"),
+    ("/", "search"),
+    ("f", "filter"),
+    ("n", "new ticket"),
+    ("b", "board"),
+    ("r", "refresh"),
+    ("?", "help"),
+];
+
+/// Hints for `TicketDetail`'s own bar — also referenced directly by `ticket_detail::draw_bar`,
+/// for the same reason as `TICKET_LIST_HINTS`.
+pub const TICKET_DETAIL_HINTS: &[(&str, &str)] = &[
+    ("S", "status"),
+    ("a", "assign self"),
+    ("c", "checkout"),
+    ("o", "open PR"),
+    ("Ctrl+Enter/O", "browser"),
+    ("j/k", "scroll"),
+    ("r", "refresh"),
+    ("?", "help"),
+];
+
 /// Returns the context-appropriate hints for the bottom status bar.
 pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str)] {
     match view {
-        AppView::TicketList => &[
-            ("t", "status"),
-            ("c", "checkout"),
-            ("/", "search"),
-            ("f", "filter"),
-            ("n", "new ticket"),
-            ("r", "refresh"),
-            ("?", "help"),
-        ],
-        AppView::TicketDetail { .. } => &[
-            ("t", "status"),
-            ("a", "assign self"),
-            ("c", "checkout"),
-            ("o", "open PR"),
-            ("b", "browser"),
-            ("j/k", "scroll"),
-            ("r", "refresh"),
-            ("?", "help"),
-        ],
+        AppView::TicketList => TICKET_LIST_HINTS,
+        AppView::TicketDetail { .. } => TICKET_DETAIL_HINTS,
         AppView::TransitionPicker { .. } => &[
             ("type", "filter"),
             ("Enter", "apply"),
@@ -290,6 +300,13 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
         AppView::TemplateEditor => &[
             ("Tab", "next field"),
             ("Enter", "edit / open picker"),
+            ("Ctrl+S", "save"),
+            ("Esc", "cancel"),
+        ],
+        AppView::FilterOptionsEditor => &[
+            ("Tab", "switch category"),
+            ("a", "add"),
+            ("x", "remove"),
             ("Ctrl+S", "save"),
             ("Esc", "cancel"),
         ],

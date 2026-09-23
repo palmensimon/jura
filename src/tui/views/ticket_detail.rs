@@ -142,7 +142,11 @@ pub fn handle_base_picker_key(app: &mut App, state: &mut DetailState, key: KeyEv
             state.branch_pick = BranchPickState::Idle;
         }
         KeyCode::Backspace => {
-            if let BranchPickState::SelectingBase { search, branches, selected, .. } = &mut state.branch_pick {
+            let already_empty = matches!(&state.branch_pick, BranchPickState::SelectingBase { search, .. } if search.is_empty());
+            if already_empty {
+                // search already empty — Backspace closes, matching board_picker/transition_picker
+                state.branch_pick = BranchPickState::Idle;
+            } else if let BranchPickState::SelectingBase { search, branches, selected, .. } = &mut state.branch_pick {
                 search.pop();
                 let n = filter_bases(branches, search).len();
                 if n == 0 {
@@ -230,7 +234,7 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
                 app.reload_issue(key);
             }
         }
-        KeyCode::Char('b') => {
+        KeyCode::Enter | KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let url = format!("{}/browse/{}", app.config.jira.base_url, issue.key);
                 let _ = open_url(&url, app.config.defaults.browser.as_deref());
@@ -358,7 +362,7 @@ pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
     }
 
     let mut spans = vec![Span::raw(" ")];
-    for (i, (key, action)) in super::help::status_bar_hints(&app.view).iter().enumerate() {
+    for (i, (key, action)) in super::help::TICKET_DETAIL_HINTS.iter().enumerate() {
         if i > 0 { spans.push(Span::raw("  ")); }
         spans.push(Span::styled(
             format!("[{key}] {action}"),

@@ -120,7 +120,7 @@ pub fn draw(app: &App, state: &BoardPickerState, frame: &mut Frame, area: Rect) 
     } else {
         (1 + filtered.len()).min(14) as u16
     };
-    let popup_h = (list_rows + 4).min(area.height.saturating_sub(4)).max(7);
+    let popup_h = (list_rows + 5).min(area.height.saturating_sub(4)).max(8);
     let x = area.x + area.width.saturating_sub(popup_w) / 2;
     let y = area.y + area.height.saturating_sub(popup_h) / 2;
     let popup = Rect::new(x, y, popup_w, popup_h);
@@ -136,7 +136,7 @@ pub fn draw(app: &App, state: &BoardPickerState, frame: &mut Frame, area: Rect) 
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Min(0)])
+        .constraints([Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)])
         .split(inner);
 
     // Search bar
@@ -161,11 +161,14 @@ pub fn draw(app: &App, state: &BoardPickerState, frame: &mut Frame, area: Rect) 
         chunks[0],
     );
 
+    let footer = Paragraph::new(Span::styled(" [↵] select   [Esc] cancel", Style::default().fg(Color::DarkGray)));
+
     if app.available_boards.is_empty() {
         frame.render_widget(
             Paragraph::new(Span::styled(" Loading boards…", Style::default().fg(Color::DarkGray))),
             chunks[1],
         );
+        frame.render_widget(footer, chunks[2]);
         return;
     }
 
@@ -206,4 +209,5 @@ pub fn draw(app: &App, state: &BoardPickerState, frame: &mut Frame, area: Rect) 
     let selected = state.selected.min(1 + filtered.len().saturating_sub(1));
     let mut list_state = ListState::default().with_selected(Some(selected));
     frame.render_stateful_widget(list, chunks[1], &mut list_state);
+    frame.render_widget(footer, chunks[2]);
 }

@@ -129,8 +129,8 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
             state.editing = true;
             state.refresh_styles();
         }
-        KeyCode::Tab | KeyCode::Down => state.move_next(),
-        KeyCode::BackTab | KeyCode::Up => state.move_prev(),
+        KeyCode::Tab | KeyCode::Down | KeyCode::Char('j') => state.move_next(),
+        KeyCode::BackTab | KeyCode::Up | KeyCode::Char('k') => state.move_prev(),
         KeyCode::Char('1') => state.move_to(F_BASE_URL),
         KeyCode::Char('2') => state.move_to(F_TOKEN),
         KeyCode::Char('3') => state.move_to(F_PROJECT),

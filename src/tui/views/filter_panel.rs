@@ -193,6 +193,7 @@ pub enum FilterPanelResult {
     Apply(FilterState),
     Save(FilterState),
     Cancel,
+    EditOptions,
 }
 
 // ── Key handling ──────────────────────────────────────────────────────────────
@@ -245,6 +246,17 @@ pub fn handle_key(
         KeyCode::Down if !state.text_editing => {
             state.next_row();
             return None;
+        }
+        KeyCode::Char('k') if !state.text_editing => {
+            state.prev_row();
+            return None;
+        }
+        KeyCode::Char('j') if !state.text_editing => {
+            state.next_row();
+            return None;
+        }
+        KeyCode::Char('e') if !state.text_editing => {
+            return Some(FilterPanelResult::EditOptions);
         }
         KeyCode::Enter if key.modifiers.is_empty() => {
             if state.text_editing {
@@ -734,7 +746,10 @@ pub fn draw(app: &App, state: &mut FilterPanelState, frame: &mut Frame, area: Re
         Line::from(Span::styled(format!(" ⚠  {err}"), Style::default().fg(Color::Red)))
     } else {
         Line::from(Span::styled(
-            format!(" {} tickets loaded", app.active_tab().issues.len()),
+            format!(
+                " {} tickets loaded   [Space] toggle  [Enter] apply  [Ctrl+S] save  [e] edit options",
+                app.active_tab().issues.len()
+            ),
             Style::default().fg(Color::DarkGray),
         ))
     };

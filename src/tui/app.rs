@@ -136,6 +136,7 @@ pub enum AppView {
     TicketSearch,
     BoardPicker,
     TemplateEditor,
+    FilterOptionsEditor,
 }
 
 #[derive(Debug, Clone)]
@@ -156,6 +157,7 @@ pub enum AppEvent {
     BoardChanged(Config, Option<Board>),
     CurrentBoardResolved(Board),
     TemplatesSaved(Vec<TicketTemplate>),
+    FilterOptionsSaved(Config),
     FieldSuggestionsLoaded(u64, Result<Vec<(String, String)>, String>),
     Error(String),
 }
@@ -510,6 +512,13 @@ impl App {
                     self.view = AppView::TemplatesPanel;
                 }
                 self.status_msg = Some("Templates saved".to_string());
+            }
+            AppEvent::FilterOptionsSaved(new_cfg) => {
+                self.config = Arc::new(new_cfg);
+                if matches!(self.view, AppView::FilterOptionsEditor) {
+                    self.view = AppView::FilterPanel;
+                }
+                self.status_msg = Some("Filter options saved".to_string());
             }
             AppEvent::FieldSuggestionsLoaded(seq, result) => {
                 if seq == self.field_picker_seq {

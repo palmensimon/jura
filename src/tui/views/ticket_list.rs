@@ -135,7 +135,7 @@ pub fn draw_bar(app: &App, frame: &mut Frame, area: Rect) {
         Line::from(Span::styled(format!(" {msg}"), Style::default().fg(Color::Green)))
     } else {
         let mut spans = vec![Span::raw(" ")];
-        for (i, (key, action)) in super::help::status_bar_hints(&AppView::TicketList).iter().enumerate() {
+        for (i, (key, action)) in super::help::TICKET_LIST_HINTS.iter().enumerate() {
             if i > 0 { spans.push(Span::raw("  ")); }
             spans.push(Span::styled(
                 format!("[{key}] {action}"),

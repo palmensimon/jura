@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap},
 };
 use tui_textarea::TextArea;
 
@@ -76,7 +76,7 @@ pub fn handle_key(app: &mut App, state: &mut CreateState, key: KeyEvent) {
         return;
     }
 
-    if key.code == KeyCode::Tab {
+    if key.code == KeyCode::Tab || key.code == KeyCode::BackTab {
         state.active_field = (state.active_field + 1) % 2;
         update_field_styles(state);
         return;
@@ -207,8 +207,8 @@ pub fn draw(app: &App, state: &mut CreateState, frame: &mut Frame, area: Rect) {
         draw_template_info(template, frame, chunks[1]);
     }
 
-    frame.render_widget(&state.summary_input, chunks[2]);
-    frame.render_widget(&state.description_input, chunks[3]);
+    draw_text_field(&state.summary_input, state.active_field == 0, "Summary", "Issue summary (required)", frame, chunks[2]);
+    draw_text_field(&state.description_input, state.active_field == 1, "Description", "Description (optional)", frame, chunks[3]);
 
     if state.loading {
         frame.render_widget(
@@ -220,6 +220,29 @@ pub fn draw(app: &App, state: &mut CreateState, frame: &mut Frame, area: Rect) {
             Paragraph::new(Span::styled(format!(" ⚠ {err}"), Style::default().fg(Color::Red))),
             chunks[4],
         );
+    }
+}
+
+/// `tui_textarea::TextArea` has no line-wrap support (long lines scroll horizontally instead),
+/// which is fine while actively editing but reads badly for a field you're not typing into.
+/// When unfocused, render a wrapped read-only preview instead of the raw text area.
+fn draw_text_field(ta: &TextArea<'static>, active: bool, title: &str, placeholder: &str, frame: &mut Frame, area: Rect) {
+    if active {
+        frame.render_widget(ta, area);
+        return;
+    }
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" {title} "))
+        .border_style(Style::default().fg(Color::DarkGray));
+    let text = ta.lines().join("\n");
+    if text.is_empty() {
+        frame.render_widget(
+            Paragraph::new(Span::styled(placeholder, Style::default().fg(Color::DarkGray))).block(block),
+            area,
+        );
+    } else {
+        frame.render_widget(Paragraph::new(text).block(block).wrap(Wrap { trim: false }), area);
     }
 }
 

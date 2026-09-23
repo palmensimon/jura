@@ -43,6 +43,9 @@ pub fn handle_key(app: &mut App, state: &mut TicketSearchState, key: KeyEvent) {
                 state.input.truncate(state.prefix_len);
             } else if state.input.len() > state.prefix_len {
                 state.input.pop();
+            } else {
+                // suffix already empty — Backspace closes, matching board_picker/transition_picker
+                app.view = state.prev_view.clone();
             }
         }
         KeyCode::Enter => {

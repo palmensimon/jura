@@ -497,6 +497,9 @@ impl App {
                     None => "Board cleared".to_string(),
                 });
                 self.current_board = board;
+                // Board scoping only affects the "All" tab's query — refetch it now so the
+                // list reflects the new board immediately instead of waiting for a manual refresh.
+                self.trigger_load_tab(Tab::All);
             }
             AppEvent::CurrentBoardResolved(board) => {
                 self.current_board = Some(board);
@@ -548,6 +551,19 @@ impl App {
             Tab::All => self.filter.build_jql(&self.config),
             Tab::Mine => self.mine_jql(),
         };
+        // Board scoping only ever applies to the "All" tab — "Mine" always shows every ticket
+        // assigned to the user regardless of which board is selected.
+        let board_id = match tab {
+            Tab::All => self.config.defaults.board_id,
+            Tab::Mine => None,
+        };
+        // The board isn't part of `jql` itself, so fold it into the cache identity key too —
+        // otherwise switching boards with an unchanged filter would briefly show the previous
+        // board's cached issues before the real fetch replaces them.
+        let cache_key = match board_id {
+            Some(id) => format!("board:{id}|{jql}"),
+            None => jql.clone(),
+        };
 
         {
             let ts = match tab {
@@ -566,7 +582,7 @@ impl App {
             Tab::Mine => crate::cache::storage::load_mine_cache(),
         };
         if let Some(cache) = cached {
-            if cache.jql == jql && !cache.issues.is_empty() {
+            if cache.jql == cache_key && !cache.issues.is_empty() {
                 let ts = match tab {
                     Tab::All => &mut self.all,
                     Tab::Mine => &mut self.mine,
@@ -581,11 +597,14 @@ impl App {
         let tx = self.event_tx.clone();
 
         tokio::spawn(async move {
-            let result = client.search_issues(&jql, max).await;
+            let result = match board_id {
+                Some(id) => client.get_board_issues(id, &jql, max).await,
+                None => client.search_issues(&jql, max).await,
+            };
             let _ = tx
                 .send(match result {
-                    Ok(r) => AppEvent::IssuesLoaded(Ok(r.issues), jql, tab),
-                    Err(e) => AppEvent::IssuesLoaded(Err(format!("{e:#}")), jql, tab),
+                    Ok(r) => AppEvent::IssuesLoaded(Ok(r.issues), cache_key, tab),
+                    Err(e) => AppEvent::IssuesLoaded(Err(format!("{e:#}")), cache_key, tab),
                 })
                 .await;
         });

@@ -5,6 +5,9 @@ use reqwest::{Client, header};
 use crate::config::JiraConfig;
 use super::models::*;
 
+const ISSUE_FIELDS: &str =
+    "summary,status,issuetype,priority,assignee,components,labels,parent,description,customfield_10020,fixVersions";
+
 pub struct JiraClient {
     client: Client,
     base_url: String,
@@ -46,7 +49,7 @@ impl JiraClient {
             .query(&[
                 ("jql", jql),
                 ("maxResults", &max_results.to_string()),
-                ("fields", "summary,status,issuetype,priority,assignee,components,labels,parent,description,customfield_10020,fixVersions"),
+                ("fields", ISSUE_FIELDS),
             ])
             .send()
             .await
@@ -61,12 +64,37 @@ impl JiraClient {
         resp.json::<SearchResult>().await.context("Failed to parse search response")
     }
 
+    /// Like `search_issues`, but scoped to a single board's own issue set (its full backlog +
+    /// all sprints, not just the active one) — `jql` further narrows within that scope.
+    pub async fn get_board_issues(&self, board_id: u64, jql: &str, max_results: u32) -> Result<SearchResult> {
+        let url = format!("{}/rest/agile/1.0/board/{board_id}/issue", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[
+                ("jql", jql),
+                ("maxResults", &max_results.to_string()),
+                ("fields", ISSUE_FIELDS),
+            ])
+            .send()
+            .await
+            .with_context(|| format!("Failed to fetch issues for board {board_id}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get board issues returned {status}: {body}");
+        }
+
+        resp.json::<SearchResult>().await.context("Failed to parse board issues response")
+    }
+
     pub async fn get_issue(&self, key: &str) -> Result<Issue> {
         let url = format!("{}/rest/api/2/issue/{key}", self.base_url);
         let resp = self
             .client
             .get(&url)
-            .query(&[("fields", "summary,status,issuetype,priority,assignee,components,labels,parent,description,customfield_10020,fixVersions")])
+            .query(&[("fields", ISSUE_FIELDS)])
             .send()
             .await
             .with_context(|| format!("Failed to fetch issue {key}"))?;

@@ -277,12 +277,6 @@ pub fn handle_key(app: &mut App, state: &mut TemplateEditorState, key: KeyEvent)
             state.active = TemplateEditorField::from_index(9);
             state.refresh_styles();
         }
-        KeyCode::Char(' ') => {
-            if state.active.is_text() {
-                state.editing_text = true;
-                state.refresh_styles();
-            }
-        }
         KeyCode::Enter => {
             if state.active.is_text() {
                 state.editing_text = true;
@@ -590,7 +584,7 @@ fn update_field_block(ta: &mut TextArea<'static>, label: &str, focused: bool, ed
     } else {
         Style::default().fg(Color::DarkGray)
     };
-    let title = if focused && !editing { format!(" {label} — Space to edit ") } else { format!(" {label} ") };
+    let title = if focused && !editing { format!(" {label} — Enter to edit ") } else { format!(" {label} ") };
     ta.set_block(Block::default().borders(Borders::ALL).title(title).border_style(border_style));
     if editing {
         ta.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));

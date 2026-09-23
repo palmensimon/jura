@@ -190,9 +190,9 @@ impl FilterPanelState {
 // ── Result ────────────────────────────────────────────────────────────────────
 
 pub enum FilterPanelResult {
-    Apply(FilterState),
+    /// Panel closed (Esc) — always applies its current state; there's no separate "cancel".
+    Exit(FilterState),
     Save(FilterState),
-    Cancel,
     EditOptions,
 }
 
@@ -229,7 +229,7 @@ pub fn handle_key(
                 state.text_editing = false;
                 return None;
             }
-            return Some(FilterPanelResult::Cancel);
+            return Some(FilterPanelResult::Exit(state.apply_to_filter(&app.filter)));
         }
         KeyCode::Tab => {
             state.next_row();
@@ -258,15 +258,12 @@ pub fn handle_key(
         KeyCode::Char('e') if !state.text_editing => {
             return Some(FilterPanelResult::EditOptions);
         }
-        KeyCode::Enter if key.modifiers.is_empty() => {
-            if state.text_editing {
-                state.text_editing = false;
-                return None;
-            }
-            return Some(FilterPanelResult::Apply(state.apply_to_filter(&app.filter)));
-        }
         KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             return Some(FilterPanelResult::Save(state.apply_to_filter(&app.filter)));
+        }
+        KeyCode::Enter if state.text_editing => {
+            state.text_editing = false;
+            return None;
         }
         _ => {}
     }
@@ -275,7 +272,7 @@ pub fn handle_key(
         ActiveRow::TextSearch => {
             if state.text_editing {
                 state.text_input.input(key);
-            } else if key.code == KeyCode::Char(' ') {
+            } else if key.code == KeyCode::Enter {
                 state.text_editing = true;
             }
         }
@@ -747,7 +744,7 @@ pub fn draw(app: &App, state: &mut FilterPanelState, frame: &mut Frame, area: Re
     } else {
         Line::from(Span::styled(
             format!(
-                " {} tickets loaded   [Space] toggle  [Enter] apply  [Ctrl+S] save  [e] edit options",
+                " {} tickets loaded   [Space] toggle  [Enter] edit search  [Esc] apply & exit  [Ctrl+S] save default  [e] edit options",
                 app.active_tab().issues.len()
             ),
             Style::default().fg(Color::DarkGray),
@@ -778,7 +775,7 @@ fn update_textarea_block(ta: &mut TextArea<'static>, label: &str, focused: bool,
         Style::default().fg(Color::DarkGray)
     };
     let title = if focused && !editing {
-        format!("{label} Space to edit ")
+        format!("{label} Enter to edit ")
     } else {
         label.to_string()
     };

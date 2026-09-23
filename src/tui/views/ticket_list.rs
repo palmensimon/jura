@@ -16,6 +16,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
     }
 
     match key.code {
+        KeyCode::Esc => {
+            let ts = app.active_tab_mut();
+            if !ts.local_search.is_empty() {
+                ts.local_search.clear();
+                ts.selected_row = 0;
+            }
+        }
         KeyCode::Up | KeyCode::Char('k') => app.move_selection_up(),
         KeyCode::Down | KeyCode::Char('j') => app.move_selection_down(),
         KeyCode::Tab | KeyCode::Char(']') => {

@@ -30,7 +30,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
         (
             "Ticket actions  (List + Detail)",
             &[
-                ("S", "Change status"),
+                ("s", "Change status"),
                 ("a", "Assign / unassign self"),
                 ("c", "Checkout / create branch"),
                 ("o", "Open PR/MR in browser"),
@@ -64,8 +64,10 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
             &[
                 ("←/→", "Move between options"),
                 ("Space", "Toggle / cycle"),
-                ("Enter", "Apply filter"),
+                ("Enter", "Edit text search"),
+                ("Esc", "Apply filter & exit"),
                 ("Ctrl+S", "Save as default"),
+                ("e", "Edit filter options"),
             ],
         ),
         (
@@ -100,11 +102,10 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
         (
             "Template Editor",
             &[
-                ("Tab / ↑↓", "Navigate fields"),
-                ("Space", "Edit text field"),
-                ("Enter", "Open field picker  (component/epic/team/…)"),
+                ("Tab / ↑↓  1-9,0", "Navigate fields"),
+                ("Enter", "Edit text field / open picker"),
+                ("Esc", "Stop editing field  /  cancel"),
                 ("Ctrl+S", "Save"),
-                ("Esc", "Cancel"),
             ],
         ),
         (
@@ -118,8 +119,10 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
         (
             "Settings",
             &[
-                ("Space", "Toggle"),
-                ("Enter", "Save"),
+                ("Tab / ↑↓  1-4", "Navigate fields"),
+                ("Enter", "Edit field"),
+                ("Esc", "Stop editing field  /  back"),
+                ("Ctrl+S", "Save"),
                 ("r", "Reload config files"),
                 ("Ctrl+D", "Edit user_settings.yaml"),
                 ("Ctrl+T", "Edit templates.yaml"),
@@ -128,6 +131,9 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
         (
             "Create Ticket",
             &[
+                ("Tab", "Navigate fields"),
+                ("Enter", "Edit field"),
+                ("Esc", "Stop editing field  /  cancel"),
                 ("Ctrl+S", "Submit"),
                 ("Ctrl+E", "Edit in $EDITOR"),
             ],
@@ -233,7 +239,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
 /// (which always means "ticket list", regardless of what `app.view` happens to be at the
 /// moment it's drawn as a popup's background).
 pub const TICKET_LIST_HINTS: &[(&str, &str)] = &[
-    ("S", "status"),
+    ("s", "status"),
     ("c", "checkout"),
     ("/", "search"),
     ("f", "filter"),
@@ -246,7 +252,7 @@ pub const TICKET_LIST_HINTS: &[(&str, &str)] = &[
 /// Hints for `TicketDetail`'s own bar — also referenced directly by `ticket_detail::draw_bar`,
 /// for the same reason as `TICKET_LIST_HINTS`.
 pub const TICKET_DETAIL_HINTS: &[(&str, &str)] = &[
-    ("S", "status"),
+    ("s", "status"),
     ("a", "assign self"),
     ("c", "checkout"),
     ("o", "open PR"),
@@ -268,7 +274,8 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
         ],
         AppView::FilterPanel => &[
             ("Space", "toggle"),
-            ("Enter", "apply"),
+            ("Enter", "edit search"),
+            ("Esc", "apply & exit"),
             ("Ctrl+S", "save settings"),
             ("?", "help"),
         ],
@@ -284,6 +291,7 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
             ("?", "help"),
         ],
         AppView::CreateTicket => &[
+            ("Enter", "edit field"),
             ("Ctrl+S", "submit"),
             ("Ctrl+E", "edit in $EDITOR"),
             ("?", "help"),

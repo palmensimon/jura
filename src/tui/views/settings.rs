@@ -125,7 +125,7 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
             app.view = AppView::TicketList;
             app.error = None;
         }
-        KeyCode::Char(' ') => {
+        KeyCode::Enter => {
             state.editing = true;
             state.refresh_styles();
         }
@@ -236,7 +236,7 @@ fn update_field_block(ta: &mut TextArea<'static>, label: &str, focused: bool, ed
         Style::default().fg(Color::DarkGray)
     };
     let title = if focused && !editing {
-        format!(" {label} — Space to edit ")
+        format!(" {label} — Enter to edit ")
     } else {
         format!(" {label} ")
     };

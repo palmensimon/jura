@@ -263,7 +263,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                     Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
                     // Global: ? toggles help (suppressed anywhere a keystroke would instead be
                     // captured as literal text — every live text field and search box).
-                    let in_text_input = matches!(app.view, AppView::CreateTicket)
+                    let in_text_input = (matches!(app.view, AppView::CreateTicket) && create_state.editing)
                         || (matches!(app.view, AppView::Settings) && settings_state.is_editing())
                         || matches!(app.view, AppView::BoardPicker)
                         || matches!(app.view, AppView::TicketSearch)
@@ -342,7 +342,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             } else if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
                                 settings_state = SettingsState::new(&app.config);
                                 app.view = AppView::Settings;
-                            } else if key.code == KeyCode::Char('S') && !app.active_tab().local_search_active {
+                            } else if key.code == KeyCode::Char('s') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
                                     let key_str = issue.key.clone();
                                     if let Some(cached) = crate::cache::storage::load_transition_cache(&key_str) {
@@ -448,7 +448,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                             }
                         }
                         AppView::TicketDetail { .. } => {
-                            if key.code == KeyCode::Char('S') && matches!(detail_state.branch_pick, BranchPickState::Idle) {
+                            if key.code == KeyCode::Char('s') && matches!(detail_state.branch_pick, BranchPickState::Idle) {
                                 if let AppView::TicketDetail { issue } = &app.view {
                                     let issue = issue.clone();
                                     let key_str = issue.key.clone();
@@ -599,7 +599,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         }
                         AppView::FilterPanel => {
                             match filter_panel::handle_key(&mut app, &mut filter_panel_state, key) {
-                                Some(FilterPanelResult::Apply(filter)) => {
+                                Some(FilterPanelResult::Exit(filter)) => {
                                     app.filter = filter;
                                     app.view = AppView::TicketList;
                                     app.trigger_load_tab(Tab::All);
@@ -638,9 +638,6 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
 
                                     app.trigger_load_tab(Tab::All);
                                     app.trigger_load_tab(Tab::Mine);
-                                }
-                                Some(FilterPanelResult::Cancel) => {
-                                    app.view = AppView::TicketList;
                                 }
                                 Some(FilterPanelResult::EditOptions) => {
                                     filter_options_state = FilterOptionsState::new(&app);

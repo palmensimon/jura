@@ -21,6 +21,7 @@ pub struct CreateState {
     pub summary_input: TextArea<'static>,
     pub description_input: TextArea<'static>,
     pub active_field: usize,
+    pub editing: bool,
     pub loading: bool,
 }
 
@@ -29,28 +30,19 @@ impl CreateState {
         let mut summary = TextArea::default();
         summary.set_placeholder_text("Issue summary (required)");
         summary.set_cursor_line_style(Style::default());
-        summary.set_block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Summary ")
-                .border_style(Style::default().fg(Color::Yellow)),
-        );
+        summary.set_block(field_block("Summary", true, false));
 
         let mut description = TextArea::default();
         description.set_placeholder_text("Description (optional)");
         description.set_cursor_line_style(Style::default());
-        description.set_block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Description ")
-                .border_style(Style::default().fg(Color::DarkGray)),
-        );
+        description.set_block(field_block("Description", false, false));
 
         Self {
             template_idx: 0,
             summary_input: summary,
             description_input: description,
             active_field: 0,
+            editing: false,
             loading: false,
         }
     }
@@ -71,16 +63,6 @@ pub fn handle_key(app: &mut App, state: &mut CreateState, key: KeyEvent) {
     if state.loading {
         return;
     }
-    if key.code == KeyCode::Esc {
-        app.view = AppView::TemplatesPanel;
-        return;
-    }
-
-    if key.code == KeyCode::Tab || key.code == KeyCode::BackTab {
-        state.active_field = (state.active_field + 1) % 2;
-        update_field_styles(state);
-        return;
-    }
 
     if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
         state.loading = true;
@@ -88,31 +70,57 @@ pub fn handle_key(app: &mut App, state: &mut CreateState, key: KeyEvent) {
         return;
     }
 
-    match state.active_field {
-        0 => { state.summary_input.input(key); }
-        1 => { state.description_input.input(key); }
+    if key.code == KeyCode::Tab || key.code == KeyCode::BackTab {
+        state.active_field = (state.active_field + 1) % 2;
+        state.editing = false;
+        update_field_styles(state);
+        return;
+    }
+
+    if state.editing {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => {
+                state.editing = false;
+                update_field_styles(state);
+            }
+            _ => match state.active_field {
+                0 => { state.summary_input.input(key); }
+                1 => { state.description_input.input(key); }
+                _ => {}
+            },
+        }
+        return;
+    }
+
+    match key.code {
+        KeyCode::Esc => {
+            app.view = AppView::TemplatesPanel;
+        }
+        KeyCode::Enter => {
+            state.editing = true;
+            update_field_styles(state);
+        }
         _ => {}
     }
 }
 
 pub fn update_field_styles(state: &mut CreateState) {
-    let active = Style::default().fg(Color::Yellow);
-    let inactive = Style::default().fg(Color::DarkGray);
-
     state.summary_input.set_cursor_line_style(Style::default());
-    state.summary_input.set_block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" Summary ")
-            .border_style(if state.active_field == 0 { active } else { inactive }),
-    );
+    state.summary_input.set_block(field_block("Summary", state.active_field == 0, state.active_field == 0 && state.editing));
     state.description_input.set_cursor_line_style(Style::default());
-    state.description_input.set_block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" Description ")
-            .border_style(if state.active_field == 1 { active } else { inactive }),
-    );
+    state.description_input.set_block(field_block("Description", state.active_field == 1, state.active_field == 1 && state.editing));
+}
+
+fn field_block(title: &str, focused: bool, editing: bool) -> Block<'static> {
+    let border_style = if editing {
+        Style::default().fg(Color::Green)
+    } else if focused {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let title = if focused && !editing { format!(" {title} — Enter to edit ") } else { format!(" {title} ") };
+    Block::default().borders(Borders::ALL).title(title).border_style(border_style)
 }
 
 fn submit_ticket(app: &mut App, state: &mut CreateState) {
@@ -207,8 +215,8 @@ pub fn draw(app: &App, state: &mut CreateState, frame: &mut Frame, area: Rect) {
         draw_template_info(template, frame, chunks[1]);
     }
 
-    draw_text_field(&state.summary_input, state.active_field == 0, "Summary", "Issue summary (required)", frame, chunks[2]);
-    draw_text_field(&state.description_input, state.active_field == 1, "Description", "Description (optional)", frame, chunks[3]);
+    draw_text_field(&state.summary_input, state.active_field == 0, state.active_field == 0 && state.editing, "Summary", "Issue summary (required)", frame, chunks[2]);
+    draw_text_field(&state.description_input, state.active_field == 1, state.active_field == 1 && state.editing, "Description", "Description (optional)", frame, chunks[3]);
 
     if state.loading {
         frame.render_widget(
@@ -225,16 +233,15 @@ pub fn draw(app: &App, state: &mut CreateState, frame: &mut Frame, area: Rect) {
 
 /// `tui_textarea::TextArea` has no line-wrap support (long lines scroll horizontally instead),
 /// which is fine while actively editing but reads badly for a field you're not typing into.
-/// When unfocused, render a wrapped read-only preview instead of the raw text area.
-fn draw_text_field(ta: &TextArea<'static>, active: bool, title: &str, placeholder: &str, frame: &mut Frame, area: Rect) {
-    if active {
+/// Only render the raw live text area while `editing`; otherwise show a wrapped read-only
+/// preview (bordered Yellow if `focused`, DarkGray otherwise — matching Settings/Template
+/// Editor's focused/editing/idle convention).
+fn draw_text_field(ta: &TextArea<'static>, focused: bool, editing: bool, title: &str, placeholder: &str, frame: &mut Frame, area: Rect) {
+    if editing {
         frame.render_widget(ta, area);
         return;
     }
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(format!(" {title} "))
-        .border_style(Style::default().fg(Color::DarkGray));
+    let block = field_block(title, focused, false);
     let text = ta.lines().join("\n");
     if text.is_empty() {
         frame.render_widget(

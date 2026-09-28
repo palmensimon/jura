@@ -8,6 +8,8 @@ use ratatui::{
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tui_textarea::TextArea;
 
+use super::text_field::{self, single_line_area, update_field_block, EditOutcome};
+
 use crate::{
     config::{Config, JiraConfig, save_config, save_settings},
     tui::app::{App, AppEvent, AppView},
@@ -110,12 +112,9 @@ pub fn handle_key(app: &mut App, state: &mut SettingsState, key: KeyEvent) {
     }
 
     if state.editing {
-        match key.code {
-            KeyCode::Esc | KeyCode::Enter => {
-                state.editing = false;
-                state.refresh_styles();
-            }
-            _ => { state.inputs[state.active].input(key); }
+        if let EditOutcome::Exit = text_field::handle_editing_key(&mut state.inputs[state.active], key, false) {
+            state.editing = false;
+            state.refresh_styles();
         }
         return;
     }
@@ -225,31 +224,4 @@ fn field_label(idx: usize) -> &'static str {
         F_BROWSER => "[4] Browser  (optional — e.g. firefox, chromium, /usr/bin/brave)",
         _ => "",
     }
-}
-
-fn update_field_block(ta: &mut TextArea<'static>, label: &str, focused: bool, editing: bool) {
-    let border_style = if editing {
-        Style::default().fg(Color::Green)
-    } else if focused {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    let title = if focused && !editing {
-        format!(" {label} — Enter to edit ")
-    } else {
-        format!(" {label} ")
-    };
-    ta.set_block(Block::default().borders(Borders::ALL).title(title).border_style(border_style));
-    if editing {
-        ta.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
-    } else {
-        ta.set_cursor_style(Style::default());
-    }
-}
-
-fn single_line_area(value: &str) -> TextArea<'static> {
-    let mut ta = TextArea::from([value]);
-    ta.move_cursor(tui_textarea::CursorMove::End);
-    ta
 }

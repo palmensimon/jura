@@ -8,6 +8,8 @@ use ratatui::{
 };
 use tui_textarea::TextArea;
 
+use super::text_field::{self, field_block, EditOutcome};
+
 use crate::{
     config::TicketTemplate,
     jira::{
@@ -53,8 +55,8 @@ pub fn handle_paste(state: &mut CreateState, text: &str) {
         return;
     }
     match state.active_field {
-        0 => { state.summary_input.insert_str(text); }
-        1 => { state.description_input.insert_str(text); }
+        0 => text_field::paste(&mut state.summary_input, text, false),
+        1 => text_field::paste(&mut state.description_input, text, true),
         _ => {}
     }
 }
@@ -78,16 +80,13 @@ pub fn handle_key(app: &mut App, state: &mut CreateState, key: KeyEvent) {
     }
 
     if state.editing {
-        match key.code {
-            KeyCode::Esc | KeyCode::Enter => {
-                state.editing = false;
-                update_field_styles(state);
-            }
-            _ => match state.active_field {
-                0 => { state.summary_input.input(key); }
-                1 => { state.description_input.input(key); }
-                _ => {}
-            },
+        let outcome = match state.active_field {
+            0 => text_field::handle_editing_key(&mut state.summary_input, key, false),
+            _ => text_field::handle_editing_key(&mut state.description_input, key, true),
+        };
+        if let EditOutcome::Exit = outcome {
+            state.editing = false;
+            update_field_styles(state);
         }
         return;
     }
@@ -109,18 +108,6 @@ pub fn update_field_styles(state: &mut CreateState) {
     state.summary_input.set_block(field_block("Summary", state.active_field == 0, state.active_field == 0 && state.editing));
     state.description_input.set_cursor_line_style(Style::default());
     state.description_input.set_block(field_block("Description", state.active_field == 1, state.active_field == 1 && state.editing));
-}
-
-fn field_block(title: &str, focused: bool, editing: bool) -> Block<'static> {
-    let border_style = if editing {
-        Style::default().fg(Color::Green)
-    } else if focused {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    let title = if focused && !editing { format!(" {title} — Enter to edit ") } else { format!(" {title} ") };
-    Block::default().borders(Borders::ALL).title(title).border_style(border_style)
 }
 
 fn submit_ticket(app: &mut App, state: &mut CreateState) {

@@ -9,6 +9,7 @@ use ratatui::{
 use tui_textarea::TextArea;
 
 use super::search_picker::{self, SearchPickerAction, SearchPickerState};
+use super::text_field::{self, single_line_area, update_field_block, EditOutcome};
 use crate::{
     config::{TicketTemplate, save_templates},
     tui::app::{App, AppEvent, AppView},
@@ -245,14 +246,10 @@ pub fn handle_key(app: &mut App, state: &mut TemplateEditorState, key: KeyEvent)
     }
 
     if state.editing_text {
-        match key.code {
-            KeyCode::Esc | KeyCode::Enter => {
-                state.editing_text = false;
-                state.refresh_styles();
-            }
-            _ => {
-                state.text_area_mut(state.active).input(key);
-            }
+        let active = state.active;
+        if let EditOutcome::Exit = text_field::handle_editing_key(state.text_area_mut(active), key, false) {
+            state.editing_text = false;
+            state.refresh_styles();
         }
         return;
     }
@@ -568,27 +565,4 @@ fn draw_field_picker(app: &App, fp: &FieldPickerState, frame: &mut Frame, area: 
         awaiting_input: awaiting_epic_input.then_some("Type at least 1 character to search epics…"),
     };
     search_picker::draw(&app.field_picker_items, &fp.picker, &opts, frame, area);
-}
-
-fn single_line_area(value: &str) -> TextArea<'static> {
-    let mut ta = TextArea::from([value]);
-    ta.move_cursor(tui_textarea::CursorMove::End);
-    ta
-}
-
-fn update_field_block(ta: &mut TextArea<'static>, label: &str, focused: bool, editing: bool) {
-    let border_style = if editing {
-        Style::default().fg(Color::Green)
-    } else if focused {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    let title = if focused && !editing { format!(" {label} — Enter to edit ") } else { format!(" {label} ") };
-    ta.set_block(Block::default().borders(Borders::ALL).title(title).border_style(border_style));
-    if editing {
-        ta.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
-    } else {
-        ta.set_cursor_style(Style::default());
-    }
 }

@@ -65,7 +65,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
                 ("←/→", "Move between options"),
                 ("Space", "Toggle / cycle"),
                 ("Enter", "Edit text search"),
-                ("Esc", "Apply filter & exit"),
+                ("Esc", "Stop editing search  /  apply filter & exit"),
                 ("Ctrl+S", "Save as default"),
                 ("e", "Edit filter options"),
             ],
@@ -132,7 +132,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
             "Create Ticket",
             &[
                 ("Tab", "Navigate fields"),
-                ("Enter", "Edit field"),
+                ("Enter", "Edit field  /  new line in Description"),
                 ("Esc", "Stop editing field  /  cancel"),
                 ("Ctrl+S", "Submit"),
                 ("Ctrl+E", "Edit in $EDITOR"),

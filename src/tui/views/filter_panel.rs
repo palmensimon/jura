@@ -8,6 +8,8 @@ use ratatui::{
 };
 use tui_textarea::TextArea;
 
+use super::text_field::{self, update_field_block, EditOutcome};
+
 use crate::config::{EpicEntry, TeamEntry};
 use crate::tui::app::{App, FilterState, SortBy, SortDir};
 
@@ -223,12 +225,18 @@ pub fn handle_key(
         }
     }
 
+    // Tab/BackTab and Ctrl+S still work while typing; everything else goes to the text field.
+    let passthrough = matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
+        || (key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL));
+    if state.text_editing && !passthrough {
+        if let EditOutcome::Exit = text_field::handle_editing_key(&mut state.text_input, key, false) {
+            state.text_editing = false;
+        }
+        return None;
+    }
+
     match key.code {
         KeyCode::Esc => {
-            if state.text_editing {
-                state.text_editing = false;
-                return None;
-            }
             return Some(FilterPanelResult::Exit(state.apply_to_filter(&app.filter)));
         }
         KeyCode::Tab => {
@@ -239,40 +247,34 @@ pub fn handle_key(
             state.prev_row();
             return None;
         }
-        KeyCode::Up if !state.text_editing => {
+        KeyCode::Up => {
             state.prev_row();
             return None;
         }
-        KeyCode::Down if !state.text_editing => {
+        KeyCode::Down => {
             state.next_row();
             return None;
         }
-        KeyCode::Char('k') if !state.text_editing => {
+        KeyCode::Char('k') => {
             state.prev_row();
             return None;
         }
-        KeyCode::Char('j') if !state.text_editing => {
+        KeyCode::Char('j') => {
             state.next_row();
             return None;
         }
-        KeyCode::Char('e') if !state.text_editing => {
+        KeyCode::Char('e') => {
             return Some(FilterPanelResult::EditOptions);
         }
         KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             return Some(FilterPanelResult::Save(state.apply_to_filter(&app.filter)));
-        }
-        KeyCode::Enter if state.text_editing => {
-            state.text_editing = false;
-            return None;
         }
         _ => {}
     }
 
     match state.active_row {
         ActiveRow::TextSearch => {
-            if state.text_editing {
-                state.text_input.input(key);
-            } else if key.code == KeyCode::Enter {
+            if key.code == KeyCode::Enter {
                 state.text_editing = true;
             }
         }
@@ -530,9 +532,9 @@ pub fn draw(app: &App, state: &mut FilterPanelState, frame: &mut Frame, area: Re
         match ri {
             // ── Text search ───────────────────────────────────────────────────
             0 => {
-                update_textarea_block(
+                update_field_block(
                     &mut state.text_input,
-                    " [1] Text search ",
+                    "[1] Text search",
                     state.active_row == ActiveRow::TextSearch,
                     state.text_editing && state.active_row == ActiveRow::TextSearch,
                 );
@@ -764,32 +766,6 @@ fn focused_block(title: &str, active: bool) -> Block<'_> {
         } else {
             Style::default().fg(Color::DarkGray)
         })
-}
-
-fn update_textarea_block(ta: &mut TextArea<'static>, label: &str, focused: bool, editing: bool) {
-    let border_style = if editing {
-        Style::default().fg(Color::Green)
-    } else if focused {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-    let title = if focused && !editing {
-        format!("{label} Enter to edit ")
-    } else {
-        label.to_string()
-    };
-    ta.set_block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(title)
-            .border_style(border_style),
-    );
-    if editing {
-        ta.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
-    } else {
-        ta.set_cursor_style(Style::default());
-    }
 }
 
 fn option_list_text(

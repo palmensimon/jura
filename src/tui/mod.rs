@@ -18,9 +18,10 @@ use ratatui::{
 use std::io;
 use tokio::sync::mpsc;
 
-use app::{App, AppEvent, AppView, Tab};
+use app::{App, AppEvent, AppView, ConfirmAction, Tab};
 use views::{
     board_picker::{self, BoardPickerState},
+    confirm,
     create_ticket::{self, CreateState},
     filter_options::{self, FilterOptionsState},
     filter_panel::{self, FilterPanelResult, FilterPanelState},
@@ -36,7 +37,7 @@ use views::{
 
 use crate::{
     config::{Config, DefaultFilter, Templates, config_dir, save_settings},
-    git::{branch_name, find_branches_for_ticket, new_pr_url, open_url},
+    git::{new_pr_url, open_url},
     jira::JiraClient,
 };
 
@@ -188,6 +189,10 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                 help::draw_status_bar(frame, bar_area, help::status_bar_hints(&app.view), app.all.loading || app.mine.loading, app.status_msg.as_deref());
             }
 
+            if let Some(pending) = &app.confirm {
+                confirm::draw(pending, frame, content_area);
+            }
+
             // Help popup (drawn last so it's on top)
             if app.show_help {
                 help::draw(frame, full_area, app.help_scroll);
@@ -261,6 +266,26 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         continue;
                     }
                     Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
+                    // A pending "modify someone else's ticket?" confirmation swallows every key.
+                    if let Some(pending) = app.confirm.take() {
+                        app.error = None;
+                        if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter) {
+                            app.status_msg = None;
+                            match pending.action {
+                                ConfirmAction::Transition { issue, return_to_list } => {
+                                    transition_picker::open(&mut app, &mut transition_state, *issue, return_to_list);
+                                }
+                                ConfirmAction::ToggleAssign { issue } => app.toggle_assignment(&issue),
+                                ConfirmAction::Checkout { issue } => {
+                                    ticket_detail::start_checkout(&mut app, &mut detail_state, *issue);
+                                }
+                            }
+                        } else {
+                            app.status_msg = Some("Cancelled".to_string());
+                        }
+                        continue;
+                    }
+
                     // Global: ? toggles help (suppressed anywhere a keystroke would instead be
                     // captured as literal text — every live text field and search box).
                     let in_text_input = (matches!(app.view, AppView::CreateTicket) && create_state.editing)
@@ -344,41 +369,15 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                 app.view = AppView::Settings;
                             } else if key.code == KeyCode::Char('s') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
-                                    let key_str = issue.key.clone();
-                                    if let Some(cached) = crate::cache::storage::load_transition_cache(&key_str) {
-                                        app.available_transitions = cached;
-                                    } else {
-                                        app.available_transitions.clear();
-                                    }
-                                    transition_state = TransitionState::new();
-                                    transition_state.return_to_list = true;
-                                    app.view = AppView::TransitionPicker { issue: Box::new(issue) };
-                                    let client = app.client.clone();
-                                    let tx = app.event_tx.clone();
-                                    tokio::spawn(async move {
-                                        match client.get_transitions(&key_str).await {
-                                            Ok(t) => { let _ = tx.send(AppEvent::TransitionsLoaded(t, key_str)).await; }
-                                            Err(e) => { let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await; }
-                                        }
-                                    });
+                                    transition_picker::request_open(&mut app, &mut transition_state, issue, true);
                                 }
                             } else if key.code == KeyCode::Char('c') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
-                                    let branches = find_branches_for_ticket(&issue.key);
-                                    match branches.len() {
-                                        0 => {
-                                            let suggested = branch_name(&issue.key, issue.summary());
-                                            let mut ta = tui_textarea::TextArea::from([suggested.as_str()]);
-                                            ta.move_cursor(tui_textarea::CursorMove::End);
-                                            detail_state.branch_pick = BranchPickState::Editing { input: ta, issue };
-                                        }
-                                        1 => app.spawn_checkout(branches.into_iter().next().unwrap(), None, &issue),
-                                        _ => detail_state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue },
-                                    }
+                                    ticket_detail::request_checkout(&mut app, &mut detail_state, issue);
                                 }
                             } else if key.code == KeyCode::Char('a') && !app.active_tab().local_search_active {
                                 if let Some(issue) = app.selected_issue().cloned() {
-                                    app.toggle_assignment(&issue);
+                                    app.request_toggle_assignment(issue);
                                 }
                             } else if (key.code == KeyCode::Enter || key.code == KeyCode::Char('o'))
                                 && key.modifiers.contains(KeyModifiers::CONTROL)
@@ -450,32 +449,8 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                         AppView::TicketDetail { .. } => {
                             if key.code == KeyCode::Char('s') && matches!(detail_state.branch_pick, BranchPickState::Idle) {
                                 if let AppView::TicketDetail { issue } = &app.view {
-                                    let issue = issue.clone();
-                                    let key_str = issue.key.clone();
-                                    // Pre-populate from cache so the list is instant
-                                    if let Some(cached) = crate::cache::storage::load_transition_cache(&key_str) {
-                                        app.available_transitions = cached;
-                                    } else {
-                                        app.available_transitions.clear();
-                                    }
-                                    transition_state = TransitionState::new();
-                                    app.view = AppView::TransitionPicker { issue };
-                                    let client = app.client.clone();
-                                    let tx = app.event_tx.clone();
-                                    tokio::spawn(async move {
-                                        match client.get_transitions(&key_str).await {
-                                            Ok(t) => {
-                                                let _ = tx
-                                                    .send(AppEvent::TransitionsLoaded(t, key_str))
-                                                    .await;
-                                            }
-                                            Err(e) => {
-                                                let _ = tx
-                                                    .send(AppEvent::Error(format!("{e:#}")))
-                                                    .await;
-                                            }
-                                        }
-                                    });
+                                    let issue = issue.as_ref().clone();
+                                    transition_picker::request_open(&mut app, &mut transition_state, issue, false);
                                 }
                             } else {
                                 ticket_detail::handle_key(&mut app, &mut detail_state, key);

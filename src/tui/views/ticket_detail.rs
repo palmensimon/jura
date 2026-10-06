@@ -11,7 +11,7 @@ use tui_textarea::TextArea;
 use crate::{
     git::{branch_name, find_branches_for_ticket, list_local_branches, new_pr_url, open_url},
     jira::Issue,
-    tui::app::{App, AppView},
+    tui::app::{App, AppView, ConfirmAction, PendingConfirm},
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -225,7 +225,7 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
         KeyCode::Char('a') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let issue = issue.as_ref().clone();
-                app.toggle_assignment(&issue);
+                app.request_toggle_assignment(issue);
             }
         }
         KeyCode::Char('r') => {
@@ -257,20 +257,40 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
         KeyCode::Char('c') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let issue = issue.as_ref().clone();
-                let branches = find_branches_for_ticket(&issue.key);
-                match branches.len() {
-                    0 => {
-                        let suggested = branch_name(&issue.key, issue.summary());
-                        let mut ta = TextArea::from([suggested.as_str()]);
-                        ta.move_cursor(tui_textarea::CursorMove::End);
-                        state.branch_pick = BranchPickState::Editing { input: ta, issue };
-                    }
-                    1 => app.spawn_checkout(branches.into_iter().next().unwrap(), None, &issue),
-                    _ => state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue },
-                }
+                request_checkout(app, state, issue);
             }
         }
         _ => {}
+    }
+}
+
+/// Starts the checkout flow, first asking for confirmation if checking out would reassign the
+/// ticket away from someone else (`assign_on_checkout`).
+pub fn request_checkout(app: &mut App, state: &mut DetailState, issue: Issue) {
+    if app.checkout_reassigns_other(&issue) {
+        let assignee = issue.assignee().to_string();
+        app.confirm = Some(PendingConfirm {
+            action: ConfirmAction::Checkout { issue: Box::new(issue) },
+            assignee,
+        });
+    } else {
+        start_checkout(app, state, issue);
+    }
+}
+
+/// Checks out the ticket's branch directly when exactly one exists, otherwise opens the branch
+/// name editor (none) or the branch picker (several).
+pub fn start_checkout(app: &mut App, state: &mut DetailState, issue: Issue) {
+    let branches = find_branches_for_ticket(&issue.key);
+    match branches.len() {
+        0 => {
+            let suggested = branch_name(&issue.key, issue.summary());
+            let mut ta = TextArea::from([suggested.as_str()]);
+            ta.move_cursor(tui_textarea::CursorMove::End);
+            state.branch_pick = BranchPickState::Editing { input: ta, issue };
+        }
+        1 => app.spawn_checkout(branches.into_iter().next().unwrap(), None, &issue),
+        _ => state.branch_pick = BranchPickState::Picking { branches, selected: 0, issue },
     }
 }
 

@@ -8,8 +8,8 @@ use ratatui::{
 };
 
 use crate::{
-    jira::Transition,
-    tui::app::{App, AppEvent, AppView},
+    jira::{Issue, Transition},
+    tui::app::{App, AppEvent, AppView, ConfirmAction, PendingConfirm},
 };
 
 pub struct TransitionState {
@@ -34,6 +34,42 @@ impl TransitionState {
             .filter(|t| t.to.name.to_lowercase().contains(&q))
             .collect()
     }
+}
+
+// ── Opening ──────────────────────────────────────────────────────────────────
+
+/// Opens the status picker, first asking for confirmation if the ticket belongs to someone else.
+pub fn request_open(app: &mut App, state: &mut TransitionState, issue: Issue, return_to_list: bool) {
+    match app.assigned_to_other(&issue) {
+        Some(assignee) => {
+            app.confirm = Some(PendingConfirm {
+                action: ConfirmAction::Transition { issue: Box::new(issue), return_to_list },
+                assignee,
+            });
+        }
+        None => open(app, state, issue, return_to_list),
+    }
+}
+
+pub fn open(app: &mut App, state: &mut TransitionState, issue: Issue, return_to_list: bool) {
+    let key_str = issue.key.clone();
+    // Pre-populate from cache so the list is instant
+    if let Some(cached) = crate::cache::storage::load_transition_cache(&key_str) {
+        app.available_transitions = cached;
+    } else {
+        app.available_transitions.clear();
+    }
+    *state = TransitionState::new();
+    state.return_to_list = return_to_list;
+    app.view = AppView::TransitionPicker { issue: Box::new(issue) };
+    let client = app.client.clone();
+    let tx = app.event_tx.clone();
+    tokio::spawn(async move {
+        match client.get_transitions(&key_str).await {
+            Ok(t) => { let _ = tx.send(AppEvent::TransitionsLoaded(t, key_str)).await; }
+            Err(e) => { let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await; }
+        }
+    });
 }
 
 // ── Key handling ─────────────────────────────────────────────────────────────

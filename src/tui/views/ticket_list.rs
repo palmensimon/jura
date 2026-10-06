@@ -250,7 +250,10 @@ fn draw_table(app: &mut App, frame: &mut Frame, area: Rect) {
     let visible = ts.visible_issues();
     let selected_row = ts.selected_row;
     let current_key = app.current_branch_key.as_deref();
-    let rows: Vec<Row> = visible.iter().map(|issue| build_issue_row(issue, current_key)).collect();
+    let rows: Vec<Row> = visible
+        .iter()
+        .map(|issue| build_issue_row(issue, current_key, app.is_assigned_to_me(issue)))
+        .collect();
 
     let widths = issue_column_widths();
 
@@ -265,7 +268,7 @@ fn draw_table(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_stateful_widget(table, area, &mut state);
 }
 
-fn build_issue_row<'a>(issue: &'a crate::jira::Issue, current_branch_key: Option<&str>) -> Row<'a> {
+fn build_issue_row<'a>(issue: &'a crate::jira::Issue, current_branch_key: Option<&str>, mine: bool) -> Row<'a> {
     let type_color = match issue.issue_type() {
         "Bug" => Color::Red,
         "Story" => Color::Green,
@@ -282,8 +285,15 @@ fn build_issue_row<'a>(issue: &'a crate::jira::Issue, current_branch_key: Option
     let is_checked_out = current_branch_key == Some(issue.key.as_str());
     let key_style = if is_checked_out {
         Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+    } else if mine {
+        Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::Cyan)
+    };
+    let assignee_style = if mine {
+        Style::default().fg(Color::White)
+    } else {
+        Style::default().fg(Color::DarkGray)
     };
     let key_text = if is_checked_out {
         format!("● {}", issue.key)
@@ -296,7 +306,7 @@ fn build_issue_row<'a>(issue: &'a crate::jira::Issue, current_branch_key: Option
         Cell::from(issue.issue_type().to_string()).style(Style::default().fg(type_color)),
         Cell::from(issue.status().to_string()).style(Style::default().fg(status_color)),
         Cell::from(issue.summary().to_string()),
-        Cell::from(issue.assignee().to_string()).style(Style::default().fg(Color::DarkGray)),
+        Cell::from(issue.assignee().to_string()).style(assignee_style),
     ])
 }
 

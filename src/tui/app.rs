@@ -139,6 +139,21 @@ pub enum AppView {
     FilterOptionsEditor,
 }
 
+/// A ticket-modifying action held back until the user confirms it, because the ticket is
+/// assigned to someone else.
+#[derive(Debug, Clone)]
+pub enum ConfirmAction {
+    Transition { issue: Box<Issue>, return_to_list: bool },
+    ToggleAssign { issue: Box<Issue> },
+    Checkout { issue: Box<Issue> },
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingConfirm {
+    pub action: ConfirmAction,
+    pub assignee: String,
+}
+
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     IssuesLoaded(Result<Vec<Issue>, String>, String, Tab),
@@ -323,6 +338,7 @@ pub struct App {
     pub field_picker_seq: u64,
     pub show_help: bool,
     pub help_scroll: u16,
+    pub confirm: Option<PendingConfirm>,
 }
 
 impl App {
@@ -364,6 +380,7 @@ impl App {
             field_picker_seq: 0,
             show_help: false,
             help_scroll: 0,
+            confirm: None,
         }
     }
 
@@ -470,13 +487,7 @@ impl App {
                 self.current_user_name = Some(name);
             }
             AppEvent::AssignmentChanged(issue) => {
-                let assigned_to_me = self.current_user_name.as_deref()
-                    .map(|me| issue.fields.assignee.as_ref()
-                        .and_then(|u| u.name.as_deref())
-                        .map(|n| n == me)
-                        .unwrap_or(false))
-                    .unwrap_or(false);
-                self.status_msg = Some(if assigned_to_me {
+                self.status_msg = Some(if self.is_assigned_to_me(&issue) {
                     "Assigned to you".to_string()
                 } else {
                     "Unassigned".to_string()
@@ -635,9 +646,7 @@ impl App {
     pub fn spawn_checkout(&self, branch: String, base: Option<String>, issue: &Issue) {
         let should_assign = self.config.defaults.assign_on_checkout
             && self.current_user_name.is_some()
-            && issue.fields.assignee.as_ref()
-                .and_then(|u| u.name.as_deref())
-                != self.current_user_name.as_deref();
+            && !self.is_assigned_to_me(issue);
         let current_user = self.current_user_name.clone();
         let key_str = issue.key.clone();
         let client = self.client.clone();
@@ -679,16 +688,47 @@ impl App {
         });
     }
 
+    pub fn is_assigned_to_me(&self, issue: &Issue) -> bool {
+        match (self.current_user_name.as_deref(), issue.fields.assignee.as_ref().and_then(|u| u.name.as_deref())) {
+            (Some(me), Some(name)) => me == name,
+            _ => false,
+        }
+    }
+
+    /// The assignee's display name when the ticket belongs to someone other than the current
+    /// user. Before the current user has loaded, any assignee counts as "other" so that
+    /// modifications still ask for confirmation.
+    pub fn assigned_to_other(&self, issue: &Issue) -> Option<String> {
+        if issue.fields.assignee.is_none() || self.is_assigned_to_me(issue) {
+            return None;
+        }
+        Some(issue.assignee().to_string())
+    }
+
+    /// Whether checking out a branch for `issue` would reassign it away from someone else.
+    pub fn checkout_reassigns_other(&self, issue: &Issue) -> bool {
+        self.config.defaults.assign_on_checkout && self.assigned_to_other(issue).is_some()
+    }
+
+    /// Toggles assignment, first asking for confirmation if the ticket belongs to someone else.
+    pub fn request_toggle_assignment(&mut self, issue: Issue) {
+        match self.assigned_to_other(&issue) {
+            Some(assignee) => {
+                self.confirm = Some(PendingConfirm {
+                    action: ConfirmAction::ToggleAssign { issue: Box::new(issue) },
+                    assignee,
+                });
+            }
+            None => self.toggle_assignment(&issue),
+        }
+    }
+
     pub fn toggle_assignment(&mut self, issue: &Issue) {
         let Some(me) = self.current_user_name.clone() else {
             self.error = Some("Current user not loaded yet".to_string());
             return;
         };
-        let is_assigned = issue.fields.assignee.as_ref()
-            .and_then(|u| u.name.as_deref())
-            .map(|n| n == me.as_str())
-            .unwrap_or(false);
-        let username: Option<String> = if is_assigned { None } else { Some(me) };
+        let username: Option<String> = if self.is_assigned_to_me(issue) { None } else { Some(me) };
         self.status_msg = Some(if username.is_some() { "Assigning…".to_string() } else { "Unassigning…".to_string() });
         let key_str = issue.key.clone();
         let client = self.client.clone();

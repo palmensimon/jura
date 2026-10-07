@@ -205,6 +205,12 @@ pub struct ProjectRef {
     pub key: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProjectSummary {
+    pub key: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct NameRef {
     pub name: String,

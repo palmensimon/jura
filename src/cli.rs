@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use anyhow::Context;
 use serde::Serialize;
 use crate::git;
 use crate::jira::models::Issue;
@@ -120,25 +121,29 @@ pub fn cmd_ticket(key: &str) {
     print_json(&detail);
 }
 
+/// Writes `<parent>/jura-cli/SKILL.md`, creating the directory as needed. Returns the written path.
+pub fn install_skill(parent: &std::path::Path) -> anyhow::Result<PathBuf> {
+    let dir = parent.join("jura-cli");
+    let dest = dir.join("SKILL.md");
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+    std::fs::write(&dest, SKILL_MD)
+        .with_context(|| format!("Failed to write skill file {}", dest.display()))?;
+    Ok(dest)
+}
+
 pub fn cmd_install_skill(path: Option<&str>) {
     let parent: PathBuf = match path {
         Some(p) => PathBuf::from(p),
         None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
     };
-    let dir = parent.join("jura-cli");
-    let dest = dir.join("SKILL.md");
-
-    if let Err(e) = std::fs::create_dir_all(&dir) {
-        eprintln!("Failed to create directory {}: {e}", dir.display());
-        std::process::exit(1);
+    match install_skill(&parent) {
+        Ok(dest) => println!("Skill written to {}", dest.display()),
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
     }
-
-    if let Err(e) = std::fs::write(&dest, SKILL_MD) {
-        eprintln!("Failed to write skill file: {e}");
-        std::process::exit(1);
-    }
-
-    println!("Skill written to {}", dest.display());
 }
 
 fn find_in_cache(key: &str) -> Option<Issue> {

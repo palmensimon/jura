@@ -236,28 +236,10 @@ pub fn save_templates(templates: &[TicketTemplate]) -> Result<()> {
         .with_context(|| format!("Failed to write templates to {}", path.display()))
 }
 
-pub fn write_example_config() -> Result<()> {
+/// Write `user_settings.yaml` with commented defaults, but only if it doesn't already exist.
+pub fn write_default_settings_file() -> Result<()> {
     let dir = config_dir();
     std::fs::create_dir_all(&dir)?;
-
-    let config_path = dir.join("config.yaml");
-    if !config_path.exists() {
-        std::fs::write(
-            &config_path,
-            r#"jira:
-  # Your Jira instance base URL (no trailing slash)
-  base_url: "https://jira.yourcompany.com"
-  # Personal access token (Jira → Account → Personal Access Tokens)
-  token: "your-personal-access-token"
-
-# Optional: default Jira project key (e.g. "PROJ")
-# project: "PROJ"
-
-# The active board (used for sprint queries) is not configured here — press Ctrl+B in
-# the TUI to pick a board. The choice is remembered in user_settings.yaml.
-"#,
-        )?;
-    }
 
     let user_settings_path = dir.join("user_settings.yaml");
     if !user_settings_path.exists() {
@@ -363,6 +345,14 @@ pub fn write_example_config() -> Result<()> {
 "#,
         )?;
     }
+
+    Ok(())
+}
+
+/// Write `templates.yaml` with example templates, but only if it doesn't already exist.
+pub fn write_default_templates_file() -> Result<()> {
+    let dir = config_dir();
+    std::fs::create_dir_all(&dir)?;
 
     let templates_path = dir.join("templates.yaml");
     if !templates_path.exists() {

@@ -347,6 +347,18 @@ impl JiraClient {
         resp.json::<Board>().await.context("Failed to parse board response")
     }
 
+    /// All Jira projects visible to the current user (used by `jura init` to pick a default project).
+    pub async fn get_projects(&self) -> Result<Vec<ProjectSummary>> {
+        let url = format!("{}/rest/api/2/project", self.base_url);
+        let resp = self.client.get(&url).send().await.context("Failed to fetch projects")?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Jira get projects returned {status}: {body}");
+        }
+        resp.json::<Vec<ProjectSummary>>().await.context("Failed to parse projects response")
+    }
+
     pub async fn get_project_components(&self, project_key: &str) -> Result<Vec<ProjectComponent>> {
         let url = format!("{}/rest/api/2/project/{project_key}/components", self.base_url);
         let resp = self

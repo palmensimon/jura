@@ -4,6 +4,7 @@ mod git;
 mod jira;
 mod cache;
 mod markdown;
+mod init;
 mod tui;
 
 use anyhow::Result;
@@ -18,7 +19,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Write example config files to ~/.config/jura/
+    /// Interactively configure Jira credentials, default project, and optional extras
     Init,
     /// List all Jira tickets assigned to me (from local cache)
     Tickets,
@@ -42,20 +43,14 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Some(Command::Init) => {
-            config::write_example_config()?;
-            let dir = config::config_dir();
-            let home = dirs::home_dir().unwrap_or_default();
-            let display = dir.strip_prefix(&home)
-                .map(|p| format!("~/{}", p.display()))
-                .unwrap_or_else(|_| dir.display().to_string());
-            println!("Config directory: {display}\n");
-            println!("  config.yaml          your Jira credentials (edit this first)");
-            println!("  user_settings.yaml   preferences and filters");
-            println!("  templates.yaml       create-ticket templates\n");
-            println!("Next steps:");
-            println!("  1. Edit {display}/config.yaml with your base_url and token");
-            println!("  2. Run `jura` to open the TUI");
-            println!("  3. Run `jura install-skill` to set up the AI skill");
+            let existing = config::load_config().ok();
+            match init::run_wizard(existing).await? {
+                Some(_) => {
+                    println!();
+                    println!("Run `jura` to open the TUI.");
+                }
+                None => println!("Init cancelled — no changes made."),
+            }
         }
         Some(Command::Tickets) => {
             cli::cmd_tickets();
@@ -70,12 +65,23 @@ async fn main() -> Result<()> {
             cli::cmd_install_skill(path.as_deref());
         }
         None => {
-            let cfg = match config::load_config() {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("Config error: {e}");
-                    eprintln!("Run `jura init` to create example config files.");
-                    std::process::exit(1);
+            let config_path = config::config_dir().join("config.yaml");
+            let cfg = if !config_path.exists() {
+                match init::run_wizard(None).await? {
+                    Some(cfg) => cfg,
+                    None => {
+                        eprintln!("Init cancelled — run `jura init` to try again.");
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                match config::load_config() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("Config error: {e}");
+                        eprintln!("Run `jura init` to reconfigure.");
+                        std::process::exit(1);
+                    }
                 }
             };
             let templates = config::load_templates().unwrap_or_default();

@@ -40,3 +40,6 @@ Config is stored in the platform default location:
 | `jura current` | Full details for the ticket linked to the current git branch |
 | `jura init` | Write example config files |
 | `jura install-skill [--path <file>]` | Write the cli AI skill file |
+| `jura help [command]` | Show CLI help |
+
+Inside the TUI, press `?` for keybindings and `q` to quit.

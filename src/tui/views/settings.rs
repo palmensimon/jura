@@ -157,7 +157,7 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
     // Header
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            " Settings",
+            "Settings",
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
         )))
         .block(
@@ -182,27 +182,26 @@ pub fn draw(app: &App, state: &mut SettingsState, frame: &mut Frame, area: Rect)
     };
     let info_lines = vec![
         Line::from(vec![
-            Span::styled("  Settings and filter preferences are configured in ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Settings and filter preferences are configured in ", Style::default().fg(Color::DarkGray)),
             Span::styled(user_settings_file.display().to_string(), Style::default().fg(Color::Cyan)),
         ]),
         Line::from(vec![
-            Span::styled("  Create ticket templates are configured in ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Create ticket templates are configured in ", Style::default().fg(Color::DarkGray)),
             Span::styled(templates_file.display().to_string(), Style::default().fg(Color::Cyan)),
         ]),
         Line::from(vec![
-            Span::styled("  Active board: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Active board: ", Style::default().fg(Color::DarkGray)),
             Span::styled(board_line, Style::default().fg(Color::Cyan)),
-            Span::styled("  (Ctrl+B to change)", Style::default().fg(Color::DarkGray)),
         ]),
     ];
     frame.render_widget(Paragraph::new(info_lines), chunks[5]);
 
     // Footer — error or config file path
     let footer_content = if let Some(err) = &app.error {
-        Line::from(Span::styled(format!(" ⚠  {err}"), Style::default().fg(Color::Red)))
+        Line::from(Span::styled(format!("⚠  {err}"), Style::default().fg(Color::Red)))
     } else {
         let path = crate::config::config_dir().join("config.yaml");
-        Line::from(Span::styled(format!(" {}", path.display()), Style::default().fg(Color::DarkGray)))
+        Line::from(Span::styled(path.display().to_string(), Style::default().fg(Color::DarkGray)))
     };
     frame.render_widget(
         Paragraph::new(footer_content).block(

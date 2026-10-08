@@ -1,6 +1,6 @@
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
@@ -187,7 +187,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
 /// When `loading` is true a right-aligned "loading…" indicator is drawn.
 /// When `loading` is false and `right_msg` is Some, that message is shown right-aligned instead.
 pub fn draw_status_bar(frame: &mut Frame, area: Rect, hints: &[(&str, &str)], loading: bool, right_msg: Option<&str>) {
-    let mut spans = vec![Span::raw(" ")];
+    let mut spans = Vec::new();
     for (i, (key, action)) in hints.iter().enumerate() {
         if i > 0 {
             spans.push(Span::raw("  "));
@@ -323,6 +323,9 @@ pub fn status_bar_hints(view: &AppView) -> &'static [(&'static str, &'static str
 
 /// Split area into [content, status_bar].
 pub fn split_with_bar(area: Rect) -> (Rect, Rect) {
+    // 1-column safe space on the left/right for every full-screen view and the status bar below
+    // it, so nothing ever sits flush against the terminal's edge.
+    let area = area.inner(Margin { horizontal: 1, vertical: 0 });
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])

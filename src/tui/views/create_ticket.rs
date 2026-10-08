@@ -183,7 +183,7 @@ pub fn draw(app: &App, state: &mut CreateState, frame: &mut Frame, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // header
+            Constraint::Length(2),  // header
             Constraint::Length(3),  // template info
             Constraint::Length(3),  // summary input
             Constraint::Min(6),     // description
@@ -192,7 +192,7 @@ pub fn draw(app: &App, state: &mut CreateState, frame: &mut Frame, area: Rect) {
         .split(area);
 
     let header = Paragraph::new(Line::from(vec![
-        Span::styled(" Create Ticket", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("Create Ticket", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(format!(" — {template_name}"), Style::default().fg(Color::DarkGray)),
     ]))
     .block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(Color::DarkGray)));
@@ -205,14 +205,15 @@ pub fn draw(app: &App, state: &mut CreateState, frame: &mut Frame, area: Rect) {
     draw_text_field(&state.summary_input, state.active_field == 0, state.active_field == 0 && state.editing, "Summary", "Issue summary (required)", frame, chunks[2]);
     draw_text_field(&state.description_input, state.active_field == 1, state.active_field == 1 && state.editing, "Description", "Description (optional)", frame, chunks[3]);
 
+    let footer_block = || Block::default().borders(Borders::TOP).border_style(Style::default().fg(Color::DarkGray));
     if state.loading {
         frame.render_widget(
-            Paragraph::new(Span::styled(" Creating ticket…", Style::default().fg(Color::Yellow))),
+            Paragraph::new(Span::styled("Creating ticket…", Style::default().fg(Color::Yellow))).block(footer_block()),
             chunks[4],
         );
     } else if let Some(err) = &app.error {
         frame.render_widget(
-            Paragraph::new(Span::styled(format!(" ⚠ {err}"), Style::default().fg(Color::Red))),
+            Paragraph::new(Span::styled(format!("⚠ {err}"), Style::default().fg(Color::Red))).block(footer_block()),
             chunks[4],
         );
     }

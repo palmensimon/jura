@@ -352,7 +352,7 @@ pub fn draw(app: &App, state: &FilterOptionsState, frame: &mut Frame, area: Rect
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            " Filter Options",
+            "Filter Options",
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
         )))
         .block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(Color::DarkGray))),
@@ -367,7 +367,7 @@ pub fn draw(app: &App, state: &FilterOptionsState, frame: &mut Frame, area: Rect
         OptionCategory::Teams,
         OptionCategory::Epics,
     ];
-    let mut tab_spans = vec![Span::raw(" ")];
+    let mut tab_spans = Vec::new();
     for (i, cat) in categories.iter().enumerate() {
         if i > 0 {
             tab_spans.push(Span::raw("  │  "));
@@ -385,7 +385,7 @@ pub fn draw(app: &App, state: &FilterOptionsState, frame: &mut Frame, area: Rect
     let items = state.current_items();
     if items.is_empty() {
         frame.render_widget(
-            Paragraph::new(Span::styled(" (none — press a to add)", Style::default().fg(Color::DarkGray))),
+            Paragraph::new(Span::styled("(none — press a to add)", Style::default().fg(Color::DarkGray))),
             chunks[2],
         );
     } else {
@@ -403,12 +403,12 @@ pub fn draw(app: &App, state: &FilterOptionsState, frame: &mut Frame, area: Rect
     }
 
     let footer = if let Some(err) = &app.error {
-        Line::from(Span::styled(format!(" ⚠  {err}"), Style::default().fg(Color::Red)))
+        Line::from(Span::styled(format!("⚠  {err}"), Style::default().fg(Color::Red)))
     } else if state.saving {
-        Line::from(Span::styled(" Saving…", Style::default().fg(Color::Yellow)))
+        Line::from(Span::styled("Saving…", Style::default().fg(Color::Yellow)))
     } else {
         Line::from(Span::styled(
-            " Tab switch  [a] add  [x] remove  [Ctrl+S] save  [Esc] cancel",
+            "Tab switch  [a] add  [x] remove  [Ctrl+S] save  [Esc] cancel",
             Style::default().fg(Color::DarkGray),
         ))
     };

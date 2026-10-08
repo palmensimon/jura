@@ -306,7 +306,7 @@ pub fn draw(app: &App, state: &mut DetailState, frame: &mut Frame, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // header
+            Constraint::Length(2), // header
             Constraint::Length(7), // metadata
             Constraint::Min(0),    // description
         ])
@@ -330,7 +330,7 @@ pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
         BranchPickState::Editing { .. } => {
             frame.render_widget(
                 Paragraph::new(Span::styled(
-                    " Enter to create branch  Esc to cancel",
+                    "Enter to create branch  Esc to cancel",
                     Style::default().fg(Color::DarkGray),
                 )),
                 area,
@@ -340,7 +340,7 @@ pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
         BranchPickState::Picking { .. } => {
             frame.render_widget(
                 Paragraph::new(Span::styled(
-                    " ↑↓ to select  Enter to checkout  Esc to cancel",
+                    "↑↓ to select  Enter to checkout  Esc to cancel",
                     Style::default().fg(Color::DarkGray),
                 )),
                 area,
@@ -350,7 +350,7 @@ pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
         BranchPickState::SelectingBase { .. } => {
             frame.render_widget(
                 Paragraph::new(Span::styled(
-                    " ↑↓ select base  Enter create  Esc cancel  type to filter",
+                    "↑↓ select base  Enter create  Esc cancel  type to filter",
                     Style::default().fg(Color::DarkGray),
                 )),
                 area,
@@ -363,7 +363,7 @@ pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
     if let Some(err) = &app.error {
         frame.render_widget(
             Paragraph::new(Span::styled(
-                format!(" Error: {err}"),
+                format!("Error: {err}"),
                 Style::default().fg(Color::Red),
             )),
             area,
@@ -373,7 +373,7 @@ pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
     if let Some(msg) = &app.status_msg {
         frame.render_widget(
             Paragraph::new(Span::styled(
-                format!(" {msg}"),
+                msg.clone(),
                 Style::default().fg(Color::Green),
             )),
             area,
@@ -381,7 +381,7 @@ pub fn draw_bar(app: &App, state: &DetailState, frame: &mut Frame, area: Rect) {
         return;
     }
 
-    let mut spans = vec![Span::raw(" ")];
+    let mut spans = Vec::new();
     for (i, (key, action)) in super::help::TICKET_DETAIL_HINTS.iter().enumerate() {
         if i > 0 { spans.push(Span::raw("  ")); }
         spans.push(Span::styled(
@@ -410,7 +410,7 @@ fn draw_header(issue: &Issue, frame: &mut Frame, area: Rect) {
 
     let title = Line::from(vec![
         Span::styled(
-            format!(" {} ", issue.key),
+            format!("{} ", issue.key),
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
         ),
         Span::styled("│ ", Style::default().fg(Color::DarkGray)),
@@ -466,7 +466,7 @@ fn draw_description(issue: &Issue, state: &DetailState, frame: &mut Frame, area:
     let text = issue.description_text().unwrap_or("*(no description)*");
 
     let block = Block::default()
-        .title(" Description ")
+        .title("Description")
         .title_style(Style::default().fg(Color::DarkGray))
         .borders(Borders::BOTTOM)
         .border_style(Style::default().fg(Color::DarkGray));

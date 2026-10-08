@@ -457,9 +457,9 @@ pub fn draw(app: &App, state: &mut TemplateEditorState, frame: &mut Frame, area:
         .split(area);
 
     let title = match state.index {
-        Some(_) if !state.draft.name.is_empty() => format!(" Edit Template — {} ", state.draft.name),
-        Some(_) => " Edit Template ".to_string(),
-        None => " New Template ".to_string(),
+        Some(_) if !state.draft.name.is_empty() => format!("Edit Template — {}", state.draft.name),
+        Some(_) => "Edit Template".to_string(),
+        None => "New Template".to_string(),
     };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
@@ -520,11 +520,11 @@ pub fn draw(app: &App, state: &mut TemplateEditorState, frame: &mut Frame, area:
     frame.render_widget(&state.labels_input, chunks[10]);
 
     let footer = if let Some(err) = &app.error {
-        Line::from(Span::styled(format!(" ⚠  {err}"), Style::default().fg(Color::Red)))
+        Line::from(Span::styled(format!("⚠  {err}"), Style::default().fg(Color::Red)))
     } else if state.saving {
-        Line::from(Span::styled(" Saving…", Style::default().fg(Color::Yellow)))
+        Line::from(Span::styled("Saving…", Style::default().fg(Color::Yellow)))
     } else {
-        Line::from(Span::styled(" Ctrl+S save   Esc cancel", Style::default().fg(Color::DarkGray)))
+        Line::from(Span::styled("Ctrl+S save   Esc cancel", Style::default().fg(Color::DarkGray)))
     };
     frame.render_widget(
         Paragraph::new(footer).block(Block::default().borders(Borders::TOP).border_style(Style::default().fg(Color::DarkGray))),

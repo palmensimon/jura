@@ -137,11 +137,11 @@ pub fn draw_bar(app: &App, frame: &mut Frame, area: Rect) {
             ),
         ])
     } else if let Some(err) = &app.error {
-        Line::from(Span::styled(format!(" Error: {err}"), Style::default().fg(Color::Red)))
+        Line::from(Span::styled(format!("Error: {err}"), Style::default().fg(Color::Red)))
     } else if let Some(msg) = &app.status_msg {
-        Line::from(Span::styled(format!(" {msg}"), Style::default().fg(Color::Green)))
+        Line::from(Span::styled(msg.clone(), Style::default().fg(Color::Green)))
     } else {
-        let mut spans = vec![Span::raw(" ")];
+        let mut spans = Vec::new();
         for (i, (key, action)) in super::help::TICKET_LIST_HINTS.iter().enumerate() {
             if i > 0 { spans.push(Span::raw("  ")); }
             spans.push(Span::styled(
@@ -196,7 +196,7 @@ fn draw_header(app: &App, frame: &mut Frame, area: Rect) {
     let project = app.filter.project.as_deref().unwrap_or("all projects");
 
     let mut title_spans: Vec<Span> = vec![
-        Span::styled(" jura ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("jura ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw("│ "),
         Span::styled(project, Style::default().fg(Color::Yellow)),
         Span::raw("  "),
@@ -212,10 +212,14 @@ fn draw_header(app: &App, frame: &mut Frame, area: Rect) {
         };
         title_spans.push(Span::styled(tab.label(), style));
     }
-    if let Some(board) = &app.current_board {
-        title_spans.push(Span::styled("  │ ", Style::default().fg(Color::DarkGray)));
-        title_spans.push(Span::styled("board: ", Style::default().fg(Color::DarkGray)));
-        title_spans.push(Span::styled(board.name.as_str(), Style::default().fg(Color::Magenta)));
+    // The board filter only applies to the All tab's query (see Tab::Mine => None in
+    // App::trigger_load_tab) — don't show it while on Mine, where it has no effect.
+    if app.tab == Tab::All {
+        if let Some(board) = &app.current_board {
+            title_spans.push(Span::styled("  │ ", Style::default().fg(Color::DarkGray)));
+            title_spans.push(Span::styled("board: ", Style::default().fg(Color::DarkGray)));
+            title_spans.push(Span::styled(board.name.as_str(), Style::default().fg(Color::Magenta)));
+        }
     }
     frame.render_widget(Paragraph::new(Line::from(title_spans)), chunks[0]);
 

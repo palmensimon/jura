@@ -222,6 +222,7 @@ pub fn handle_key(app: &mut App, state: &mut DetailState, key: KeyEvent) {
         }
         KeyCode::PageUp => { state.scroll = state.scroll.saturating_sub(20); }
         KeyCode::PageDown => { state.scroll = state.scroll.saturating_add(20); }
+        KeyCode::Char('u') => app.undo(),
         KeyCode::Char('a') => {
             if let AppView::TicketDetail { issue } = &app.view {
                 let issue = issue.as_ref().clone();

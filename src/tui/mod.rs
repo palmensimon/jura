@@ -202,7 +202,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
         tokio::select! {
             Some(app_event) = event_rx.recv() => {
                 let was_picking = matches!(app.view, AppView::TransitionPicker { .. });
-                let is_applied = matches!(app_event, AppEvent::TransitionApplied(_));
+                let is_applied = matches!(app_event, AppEvent::TransitionApplied { .. });
                 let was_in_detail = matches!(app.view, AppView::TicketDetail { .. });
                 app.handle_event(app_event);
                 if !was_in_detail && matches!(app.view, AppView::TicketDetail { .. }) {
@@ -412,6 +412,8 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
                                         app.error = Some("Checkout a branch for this ticket first".to_string());
                                     }
                                 }
+                            } else if key.code == KeyCode::Char('u') && !app.active_tab().local_search_active {
+                                app.undo();
                             } else if key.code == KeyCode::Char('n') && !app.active_tab().local_search_active {
                                 templates_panel_state = TemplatesPanelState::new();
                                 app.view = AppView::TemplatesPanel;

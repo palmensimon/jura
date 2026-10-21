@@ -154,6 +154,13 @@ pub struct PendingConfirm {
     pub assignee: String,
 }
 
+/// The most recent ticket change that `u` can revert.
+#[derive(Debug, Clone)]
+pub enum UndoAction {
+    Status { key: String, from: String },
+    Assign { key: String, previous: Option<String> },
+}
+
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     IssuesLoaded(Result<Vec<Issue>, String>, String, Tab),
@@ -163,10 +170,12 @@ pub enum AppEvent {
     FilterSaved(Config),
     FilterOptions { statuses: Vec<String>, components: Vec<String> },
     TransitionsLoaded(Vec<Transition>, String),
-    TransitionApplied(String),
+    TransitionApplied { key: String, from: String },
     IssueReloaded(Issue),
     UserLoaded(String),
-    AssignmentChanged(Issue),
+    /// `previous` is the username assigned before the change, for undo.
+    AssignmentChanged { issue: Issue, previous: Option<String> },
+    Undone(String, Issue),
     TicketFound(Issue),
     BoardsLoaded(Vec<Board>),
     BoardChanged(Config, Option<Board>),
@@ -339,6 +348,7 @@ pub struct App {
     pub show_help: bool,
     pub help_scroll: u16,
     pub confirm: Option<PendingConfirm>,
+    pub last_undo: Option<UndoAction>,
 }
 
 impl App {
@@ -381,6 +391,7 @@ impl App {
             show_help: false,
             help_scroll: 0,
             confirm: None,
+            last_undo: None,
         }
     }
 
@@ -432,7 +443,7 @@ impl App {
             AppEvent::TicketCreated(key) => {
                 self.status_msg = Some(format!("Created {key}"));
                 self.view = AppView::TicketList;
-                self.trigger_load();
+                self.reload_after_change();
             }
             AppEvent::ConfigSaved(new_cfg) => {
                 match JiraClient::new(&new_cfg.jira) {
@@ -477,9 +488,10 @@ impl App {
                 crate::cache::storage::save_transition_cache(&issue_key, &transitions);
                 self.available_transitions = transitions;
             }
-            AppEvent::TransitionApplied(_key) => {
-                self.status_msg = Some("Status updated".to_string());
-                self.trigger_load();
+            AppEvent::TransitionApplied { key, from } => {
+                self.last_undo = Some(UndoAction::Status { key, from });
+                self.status_msg = Some("Status updated — u to undo".to_string());
+                self.reload_after_change();
                 // View change is handled by mod.rs based on transition_state.return_to_list
             }
             AppEvent::IssueReloaded(issue) => {
@@ -490,16 +502,24 @@ impl App {
             AppEvent::UserLoaded(name) => {
                 self.current_user_name = Some(name);
             }
-            AppEvent::AssignmentChanged(issue) => {
+            AppEvent::AssignmentChanged { issue, previous } => {
+                self.last_undo = Some(UndoAction::Assign { key: issue.key.clone(), previous });
                 self.status_msg = Some(if self.is_assigned_to_me(&issue) {
-                    "Assigned to you".to_string()
+                    "Assigned to you — u to undo".to_string()
                 } else {
-                    "Unassigned".to_string()
+                    "Unassigned — u to undo".to_string()
                 });
                 if matches!(self.view, AppView::TicketDetail { .. }) {
                     self.view = AppView::TicketDetail { issue: Box::new(issue) };
                 }
-                self.trigger_load();
+                self.reload_after_change();
+            }
+            AppEvent::Undone(msg, issue) => {
+                self.status_msg = Some(msg);
+                if matches!(&self.view, AppView::TicketDetail { issue: shown } if shown.key == issue.key) {
+                    self.view = AppView::TicketDetail { issue: Box::new(issue) };
+                }
+                self.reload_after_change();
             }
             AppEvent::TicketFound(issue) => {
                 self.view = AppView::TicketDetail { issue: Box::new(issue) };
@@ -568,6 +588,16 @@ impl App {
         self.current_branch_key = branch.as_deref().and_then(crate::git::extract_ticket_key);
         self.current_branch_name = branch;
         self.trigger_load_tab(self.tab);
+    }
+
+    /// Reloads after a ticket was changed, so both tabs reflect it. The inactive tab is
+    /// skipped until it has been loaded — `switch_tab` loads an empty Mine tab on its own.
+    fn reload_after_change(&mut self) {
+        self.trigger_load();
+        let other = self.tab.next();
+        if !self.tab_state(other).issues.is_empty() {
+            self.trigger_load_tab(other);
+        }
     }
 
     pub fn trigger_load_tab(&mut self, tab: Tab) {
@@ -652,6 +682,7 @@ impl App {
             && self.current_user_name.is_some()
             && !self.is_assigned_to_me(issue);
         let current_user = self.current_user_name.clone();
+        let previous = issue.fields.assignee.as_ref().and_then(|u| u.name.clone());
         let key_str = issue.key.clone();
         let client = self.client.clone();
         let tx = self.event_tx.clone();
@@ -669,7 +700,7 @@ impl App {
                         if let Some(name) = current_user {
                             if let Ok(()) = client.assign_issue(&key_str, Some(&name)).await {
                                 if let Ok(reloaded) = client.get_issue(&key_str).await {
-                                    let _ = tx.send(AppEvent::AssignmentChanged(reloaded)).await;
+                                    let _ = tx.send(AppEvent::AssignmentChanged { issue: reloaded, previous }).await;
                                 }
                             }
                         }
@@ -734,6 +765,7 @@ impl App {
         };
         let username: Option<String> = if self.is_assigned_to_me(issue) { None } else { Some(me) };
         self.status_msg = Some(if username.is_some() { "Assigning…".to_string() } else { "Unassigning…".to_string() });
+        let previous = issue.fields.assignee.as_ref().and_then(|u| u.name.clone());
         let key_str = issue.key.clone();
         let client = self.client.clone();
         let tx = self.event_tx.clone();
@@ -741,10 +773,52 @@ impl App {
             match client.assign_issue(&key_str, username.as_deref()).await {
                 Err(e) => { let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await; }
                 Ok(()) => match client.get_issue(&key_str).await {
-                    Ok(issue) => { let _ = tx.send(AppEvent::AssignmentChanged(issue)).await; }
+                    Ok(issue) => { let _ = tx.send(AppEvent::AssignmentChanged { issue, previous }).await; }
                     Err(e) => { let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await; }
                 }
             }
+        });
+    }
+
+    /// Reverts the last status change or assignment. A status change is undone through
+    /// whichever workflow transition leads back to the previous status, if one exists.
+    pub fn undo(&mut self) {
+        let Some(action) = self.last_undo.take() else {
+            self.error = Some("Nothing to undo".to_string());
+            return;
+        };
+        self.status_msg = Some("Undoing…".to_string());
+        let client = self.client.clone();
+        let tx = self.event_tx.clone();
+        tokio::spawn(async move {
+            let result = async {
+                let (key, msg) = match action {
+                    UndoAction::Status { key, from } => {
+                        let transitions = client.get_transitions(&key).await?;
+                        let back = transitions
+                            .iter()
+                            .find(|t| t.to.name.eq_ignore_ascii_case(&from))
+                            .ok_or_else(|| anyhow::anyhow!("Can't undo: no transition back to '{from}' for {key}"))?;
+                        client.do_transition(&key, &back.id).await?;
+                        let msg = format!("Undone — {key} back to {from}");
+                        (key, msg)
+                    }
+                    UndoAction::Assign { key, previous } => {
+                        client.assign_issue(&key, previous.as_deref()).await?;
+                        let msg = match &previous {
+                            Some(name) => format!("Undone — {key} assigned back to {name}"),
+                            None => format!("Undone — {key} unassigned"),
+                        };
+                        (key, msg)
+                    }
+                };
+                let issue = client.get_issue(&key).await?;
+                anyhow::Ok(AppEvent::Undone(msg, issue))
+            }
+            .await;
+            let _ = tx
+                .send(result.unwrap_or_else(|e| AppEvent::Error(format!("{e:#}"))))
+                .await;
         });
     }
 

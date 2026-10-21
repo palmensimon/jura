@@ -107,6 +107,10 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
                 let transition_id = transition.id.clone();
                 let to_status = transition.to.name.clone();
                 let key_str = issue_key(app).to_string();
+                let from_status = match &app.view {
+                    AppView::TransitionPicker { issue } => issue.status().to_string(),
+                    _ => String::new(),
+                };
                 let client = app.client.clone();
                 let tx = app.event_tx.clone();
                 let sprint_triggers = app.config.defaults.sprint_on_transition.clone();
@@ -118,7 +122,7 @@ pub fn handle_key(app: &mut App, state: &mut TransitionState, key: KeyEvent) {
                             let _ = tx.send(AppEvent::Error(format!("{e:#}"))).await;
                         }
                         Ok(()) => {
-                            let _ = tx.send(AppEvent::TransitionApplied(key_str.clone())).await;
+                            let _ = tx.send(AppEvent::TransitionApplied { key: key_str.clone(), from: from_status }).await;
                             if sprint_triggers.iter().any(|s| s.eq_ignore_ascii_case(&to_status)) {
                                 match board_id {
                                     Some(id) => {

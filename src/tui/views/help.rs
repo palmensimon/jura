@@ -32,6 +32,7 @@ pub fn draw(frame: &mut Frame, area: Rect, scroll: u16) {
             &[
                 ("s", "Change status"),
                 ("a", "Assign / unassign self"),
+                ("u", "Undo last status / assign change"),
                 ("c", "Checkout / create branch"),
                 ("o", "Open PR/MR in browser"),
                 ("Ctrl+Enter  Ctrl+O", "Open ticket in browser"),

@@ -44,6 +44,7 @@ Config is stored in the platform default location:
 | `jura current` | Full details for the ticket linked to the current git branch |
 | `jura init` | Interactive wizard to configure credentials and defaults |
 | `jura install-skill [--path <file>]` | Write the cli AI skill file |
+| `jura update` | Update to the latest version from GitHub (requires `cargo`) |
 | `jura help [command]` | Show CLI help |
 
 Inside the TUI, press `?` for keybindings and `q` to quit.

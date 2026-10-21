@@ -35,6 +35,8 @@ enum Command {
         #[arg(long)]
         path: Option<String>,
     },
+    /// Update jura to the latest version from GitHub (runs `cargo install --git`)
+    Update,
 }
 
 #[tokio::main]
@@ -63,6 +65,9 @@ async fn main() -> Result<()> {
         }
         Some(Command::InstallSkill { path }) => {
             cli::cmd_install_skill(path.as_deref());
+        }
+        Some(Command::Update) => {
+            cli::cmd_update();
         }
         None => {
             let config_path = config::config_dir().join("config.yaml");

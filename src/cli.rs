@@ -146,6 +146,22 @@ pub fn cmd_install_skill(path: Option<&str>) {
     }
 }
 
+pub fn cmd_update() {
+    let repo = env!("CARGO_PKG_REPOSITORY");
+    println!("Updating jura from {repo}...");
+    let status = std::process::Command::new("cargo")
+        .args(["install", "--git", repo, "--locked"])
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(s) => std::process::exit(s.code().unwrap_or(1)),
+        Err(e) => {
+            eprintln!("Failed to run cargo: {e}. Is the Rust toolchain installed and on PATH?");
+            std::process::exit(1);
+        }
+    }
+}
+
 fn find_in_cache(key: &str) -> Option<Issue> {
     if let Some(cache) = load_mine_cache() {
         if let Some(issue) = cache.issues.into_iter().find(|i| i.key == key) {

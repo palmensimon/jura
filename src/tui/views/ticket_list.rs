@@ -185,53 +185,62 @@ fn draw_header(app: &App, frame: &mut Frame, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let summary =format!("{} tickets", app.active_tab().issues.len());
-    let right_width = (summary.chars().count() as u16 + 1).min(area.width.saturating_sub(20));
-
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(0), Constraint::Length(right_width)])
-        .split(inner);
-
     let project = app.filter.project.as_deref().unwrap_or("all projects");
 
+    let sep = Style::default().fg(Color::DarkGray);
     let mut title_spans: Vec<Span> = vec![
-        Span::styled("jura ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::raw("│ "),
+        Span::styled(" jura ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("│ ", sep),
         Span::styled(project, Style::default().fg(Color::Yellow)),
-        Span::raw("  "),
+        Span::styled(" │ ", sep),
     ];
-    for (i, tab) in [Tab::All, Tab::Mine].iter().enumerate() {
-        if i > 0 {
-            title_spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
-        }
-        let style = if *tab == app.tab {
-            Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-        title_spans.push(Span::styled(tab.label(), style));
-    }
     // The board filter only applies to the All tab's query (see Tab::Mine => None in
     // App::trigger_load_tab) — don't show it while on Mine, where it has no effect.
-    if app.tab == Tab::All {
-        if let Some(board) = &app.current_board {
-            title_spans.push(Span::styled("  │ ", Style::default().fg(Color::DarkGray)));
-            title_spans.push(Span::styled("board: ", Style::default().fg(Color::DarkGray)));
-            title_spans.push(Span::styled(board.name.as_str(), Style::default().fg(Color::Magenta)));
-        }
-    }
-    frame.render_widget(Paragraph::new(Line::from(title_spans)), chunks[0]);
+    let board_spans: Vec<Span> = match (&app.current_board, app.tab) {
+        (Some(board), Tab::All) => vec![
+            Span::styled("│ ", sep),
+            Span::styled("board: ", sep),
+            Span::styled(board.name.as_str(), Style::default().fg(Color::Magenta)),
+        ],
+        _ => Vec::new(),
+    };
+    let used: usize = title_spans.iter().chain(&board_spans).map(|s| s.width()).sum();
+    title_spans.extend(tab_spans(app, (inner.width as usize).saturating_sub(used)));
+    title_spans.extend(board_spans);
+    frame.render_widget(Paragraph::new(Line::from(title_spans)), inner);
+}
 
-    if right_width > 0 {
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                summary,
-                Style::default().fg(Color::DarkGray),
-            ))),
-            chunks[1],
-        );
+/// " All 12   Mine 3 " (ticket counts) with the active tab highlighted. When that
+/// doesn't fit, only the active one with its position, e.g. " Mine 3  (2/2)".
+fn tab_spans(app: &App, max_width: usize) -> Vec<Span<'static>> {
+    let active = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
+    let idle = Style::default().fg(Color::DarkGray);
+    let names: Vec<(String, bool)> = [Tab::All, Tab::Mine]
+        .into_iter()
+        .map(|tab| {
+            let ts = app.tab_state(tab);
+            // Counts are meaningless until the tab's first load has finished.
+            let name = if ts.loading && ts.issues.is_empty() {
+                tab.label().to_string()
+            } else {
+                format!("{} {}", tab.label(), ts.issues.len())
+            };
+            (name, tab == app.tab)
+        })
+        .collect();
+
+    let full_width: usize = names.iter().map(|(n, _)| n.chars().count() + 3).sum();
+    if full_width <= max_width {
+        return names
+            .into_iter()
+            .flat_map(|(name, on)| [Span::styled(format!(" {name} "), if on { active } else { idle }), Span::raw(" ")])
+            .collect();
     }
+    let pos = names.iter().position(|(_, on)| *on).unwrap_or(0);
+    vec![
+        Span::styled(format!(" {} ", names[pos].0), active),
+        Span::styled(format!(" ({}/{}) ", pos + 1, names.len()), idle),
+    ]
 }
 
 fn draw_table(app: &mut App, frame: &mut Frame, area: Rect) {

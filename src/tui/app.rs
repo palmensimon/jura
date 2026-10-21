@@ -385,7 +385,11 @@ impl App {
     }
 
     pub fn active_tab(&self) -> &TabState {
-        match self.tab {
+        self.tab_state(self.tab)
+    }
+
+    pub fn tab_state(&self, tab: Tab) -> &TabState {
+        match tab {
             Tab::All => &self.all,
             Tab::Mine => &self.mine,
         }

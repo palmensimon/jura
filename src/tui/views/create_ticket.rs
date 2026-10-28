@@ -15,7 +15,7 @@ use crate::{
     jira::{
         CreateIssueFields, CreateIssueRequest, NameRef, ProjectRef,
     },
-    tui::app::{App, AppEvent, AppView},
+    tui::app::{App, AppEvent, AppView, Tab},
 };
 
 pub struct CreateState {
@@ -135,7 +135,13 @@ fn submit_ticket(app: &mut App, state: &mut CreateState) {
         .map(|c| vec![NameRef { name: c.clone() }])
         .unwrap_or_default();
 
-    let assignee = template.assignee.as_ref().map(|a| NameRef { name: a.clone() });
+    // On the "Mine" tab, every ticket created should land assigned to the current user,
+    // overriding whatever the template specifies.
+    let assignee = if app.tab == Tab::Mine {
+        app.current_user_name.as_ref().map(|u| NameRef { name: u.clone() })
+    } else {
+        template.assignee.as_ref().map(|a| NameRef { name: a.clone() })
+    };
     let team = template.team.clone();
     let fix_versions: Vec<NameRef> = template
         .fix_version

@@ -71,7 +71,7 @@ pub async fn run_tui(config: Config, templates: Templates, client: JiraClient) -
     let mut template_editor_state = TemplateEditorState::new(&app, None);
     let mut filter_options_state = FilterOptionsState::new(&app);
 
-    app.trigger_load();
+    app.trigger_load_all_tabs();
 
     // Load current user for assignment toggle
     {

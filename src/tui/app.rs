@@ -590,6 +590,13 @@ impl App {
         self.trigger_load_tab(self.tab);
     }
 
+    /// Loads both tabs so their counts in the top bar are correct from the start, instead of
+    /// the inactive tab sitting at 0 until the user switches to it.
+    pub fn trigger_load_all_tabs(&mut self) {
+        self.trigger_load();
+        self.trigger_load_tab(self.tab.next());
+    }
+
     /// Reloads after a ticket was changed, so both tabs reflect it. The inactive tab is
     /// skipped until it has been loaded — `switch_tab` loads an empty Mine tab on its own.
     fn reload_after_change(&mut self) {
